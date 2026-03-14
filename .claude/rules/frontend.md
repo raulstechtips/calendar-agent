@@ -51,6 +51,14 @@ paths:
 - Use discriminated unions for mutually exclusive state, not boolean flags
 - Use `z.infer<typeof schema>` to derive types from Zod schemas — single source of truth
 
+## Documentation
+
+- Add `/** ... */` JSDoc to exported utility functions in `lib/` and custom hooks in `hooks/`
+- Do NOT add JSDoc to React components — the component name + props interface are the documentation
+- Do NOT add JSDoc to props interfaces — property names + TypeScript types are self-documenting
+- Server Actions and Route Handlers: add a one-line JSDoc describing what the action/handler does (these are effectively API endpoints)
+- Inline comments: explain "why" not "what" — non-obvious Tailwind workarounds, browser-specific hacks, Next.js caching behavior
+
 ## Tailwind + shadcn/ui
 
 - Never use inline styles — always Tailwind classes
