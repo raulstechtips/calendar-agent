@@ -45,6 +45,15 @@ paths:
 - Use `model_dump(exclude_unset=True)` for PATCH operations
 - Use `@computed_field` on `@property` for derived values in API responses
 
+## Docstrings
+
+- Use Google-style docstrings (compatible with `parse_docstring=True` and Sphinx)
+- One-line summary in imperative mood. Extended description only when the function does something non-obvious
+- `Args:` only when parameter names + types aren't self-explanatory. `Returns:` only when the return type annotation isn't sufficient. `Raises:` when callers need to handle domain exceptions
+- Pydantic models: do NOT add docstrings — field names, types, and `Field(description=...)` are the documentation. Only add a class-level docstring if the model's purpose isn't clear from its name
+- FastAPI endpoints: add a one-line docstring (it appears in the auto-generated OpenAPI/Swagger docs)
+- Test functions: do NOT add docstrings — the test name (`test_should_reject_expired_token`) is the documentation
+
 ## Python Async
 
 - Use `asyncio.TaskGroup` (not `asyncio.gather`) for concurrent operations — structured concurrency

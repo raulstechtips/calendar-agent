@@ -32,6 +32,15 @@ description: Code quality and anti-pattern rules
 - Remove ALL commented-out code
 - The only acceptable logging is structured production logging
 
+## Documentation
+
+- Add docstrings to public functions, classes, and modules you create or substantially modify
+- Do NOT retroactively document code you didn't change
+- Prefer clear naming + type signatures over comments — only add comments when the "why" isn't obvious from the code
+- Do NOT document trivial/obvious functions (getters, one-liner utilities, Pydantic models where field names are self-documenting)
+- Do NOT add comments that restate the code (`# increment counter` above `counter += 1`)
+- When a framework reads docstrings at runtime (LangGraph `@tool`, FastAPI OpenAPI), always write them — they're functional, not decorative
+
 ## Dependencies
 
 - Do NOT add any package not listed in the SPEC or already in package.json/pyproject.toml without asking first
