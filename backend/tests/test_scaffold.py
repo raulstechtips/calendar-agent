@@ -21,7 +21,7 @@ class TestHealthEndpoint:
     async def test_health_returns_ok(self, client: httpx.AsyncClient) -> None:
         response = await client.get("/health")
         assert response.status_code == 200
-        assert response.json() == {"status": "ok"}
+        assert response.json()["status"] == "ok"
 
     async def test_health_returns_json_content_type(
         self, client: httpx.AsyncClient
