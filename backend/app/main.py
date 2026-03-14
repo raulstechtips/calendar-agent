@@ -14,11 +14,11 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    # Startup: eagerly create the Redis client so connection issues surface early
+    # Startup: eagerly create the Redis client (connection is lazy on first command)
     get_redis()
     yield
     # Shutdown: clean up Redis connection
-    await close_redis(get_redis())
+    await close_redis()
 
 
 app = FastAPI(title="AI Calendar Assistant", lifespan=lifespan)

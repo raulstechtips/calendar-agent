@@ -7,7 +7,13 @@ import httpx
 import pytest
 from httpx import ASGITransport
 
+import app.core.redis as redis_module
 from app.main import app
+
+
+@pytest.fixture(autouse=True)
+def _reset_redis_singleton() -> None:
+    redis_module._redis_client = None
 
 
 @pytest.fixture
@@ -87,10 +93,23 @@ class TestHealthEndpointWithRedis:
 
 
 class TestRedisLifecycle:
-    async def test_close_redis_calls_aclose(self) -> None:
-        from app.core.redis import close_redis, create_redis
+    async def test_close_redis_calls_aclose_on_singleton(self) -> None:
+        from app.core.redis import close_redis, get_redis
 
-        client = create_redis("redis://localhost:6379/0")
+        client = get_redis()
         with patch.object(client, "aclose", new_callable=AsyncMock) as mock_aclose:
-            await close_redis(client)
+            await close_redis()
             mock_aclose.assert_awaited_once()
+
+    async def test_close_redis_clears_singleton(self) -> None:
+        from app.core.redis import close_redis, get_redis
+
+        client = get_redis()
+        with patch.object(client, "aclose", new_callable=AsyncMock):
+            await close_redis()
+        assert redis_module._redis_client is None
+
+    async def test_close_redis_is_safe_when_no_client(self) -> None:
+        from app.core.redis import close_redis
+
+        await close_redis()  # should not raise
