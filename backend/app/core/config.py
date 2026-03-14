@@ -36,8 +36,14 @@ class Settings(BaseSettings):
     @classmethod
     def parse_cors_origins(cls, v: str | list[str]) -> list[str]:
         if isinstance(v, str):
-            return [origin.strip() for origin in v.split(",")]
-        return v
+            origins = [o.strip() for o in v.split(",") if o.strip()]
+        else:
+            origins = [o.strip() for o in v if o.strip()]
+        if "*" in origins:
+            raise ValueError(
+                "CORS wildcard '*' is not allowed when credentials are enabled"
+            )
+        return origins
 
 
 settings = Settings()

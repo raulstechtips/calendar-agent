@@ -1,32 +1,39 @@
 """Tests for FastAPI scaffold: health endpoint, CORS, request ID, rate limiting."""
 
+from collections.abc import AsyncGenerator
+
 import httpx
 import pytest
 from httpx import ASGITransport
+from pydantic import ValidationError
 
 from app.main import app
 
 
 @pytest.fixture
-async def client():
+async def client() -> AsyncGenerator[httpx.AsyncClient, None]:
     transport = ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
 
 
 class TestHealthEndpoint:
-    async def test_health_returns_ok(self, client: httpx.AsyncClient):
+    async def test_health_returns_ok(self, client: httpx.AsyncClient) -> None:
         response = await client.get("/health")
         assert response.status_code == 200
         assert response.json() == {"status": "ok"}
 
-    async def test_health_returns_json_content_type(self, client: httpx.AsyncClient):
+    async def test_health_returns_json_content_type(
+        self, client: httpx.AsyncClient
+    ) -> None:
         response = await client.get("/health")
         assert "application/json" in response.headers["content-type"]
 
 
 class TestCORS:
-    async def test_cors_allows_configured_origin(self, client: httpx.AsyncClient):
+    async def test_cors_allows_configured_origin(
+        self, client: httpx.AsyncClient
+    ) -> None:
         response = await client.options(
             "/health",
             headers={
@@ -39,7 +46,9 @@ class TestCORS:
             == "http://localhost:3000"
         )
 
-    async def test_cors_rejects_unconfigured_origin(self, client: httpx.AsyncClient):
+    async def test_cors_rejects_unconfigured_origin(
+        self, client: httpx.AsyncClient
+    ) -> None:
         response = await client.options(
             "/health",
             headers={
@@ -49,7 +58,7 @@ class TestCORS:
         )
         assert response.headers.get("access-control-allow-origin") != "http://evil.com"
 
-    async def test_cors_allows_credentials(self, client: httpx.AsyncClient):
+    async def test_cors_allows_credentials(self, client: httpx.AsyncClient) -> None:
         response = await client.options(
             "/health",
             headers={
@@ -61,11 +70,13 @@ class TestCORS:
 
 
 class TestRequestID:
-    async def test_response_has_request_id_header(self, client: httpx.AsyncClient):
+    async def test_response_has_request_id_header(
+        self, client: httpx.AsyncClient
+    ) -> None:
         response = await client.get("/health")
         assert "x-request-id" in response.headers
 
-    async def test_echoes_provided_request_id(self, client: httpx.AsyncClient):
+    async def test_echoes_provided_request_id(self, client: httpx.AsyncClient) -> None:
         request_id = "550e8400-e29b-41d4-a716-446655440000"
         response = await client.get(
             "/health",
@@ -75,7 +86,7 @@ class TestRequestID:
 
     async def test_generates_request_id_when_not_provided(
         self, client: httpx.AsyncClient
-    ):
+    ) -> None:
         response = await client.get("/health")
         request_id = response.headers.get("x-request-id")
         assert request_id is not None
@@ -83,20 +94,28 @@ class TestRequestID:
 
 
 class TestRateLimiting:
-    async def test_rate_limit_headers_present(self, client: httpx.AsyncClient):
-        response = await client.get("/health")
-        assert response.status_code == 200
+    def test_slowapi_middleware_registered(self) -> None:
+        from slowapi.middleware import SlowAPIMiddleware
+
+        middleware_classes = [m.cls for m in app.user_middleware]
+        assert SlowAPIMiddleware in middleware_classes
+
+    def test_limiter_configured_on_app_state(self) -> None:
+        from slowapi import Limiter
+
+        assert hasattr(app.state, "limiter")
+        assert isinstance(app.state.limiter, Limiter)
 
 
 class TestConfig:
-    def test_config_loads_defaults(self):
+    def test_config_loads_defaults(self) -> None:
         from app.core.config import Settings
 
         settings = Settings()
         assert settings.cors_origins == ["http://localhost:3000"]
         assert settings.redis_url == "redis://localhost:6379/0"
 
-    def test_config_parses_multiple_cors_origins(self):
+    def test_config_parses_multiple_cors_origins(self) -> None:
         from app.core.config import Settings
 
         settings = Settings(cors_origins="http://localhost:3000,http://localhost:8080")
@@ -104,3 +123,15 @@ class TestConfig:
             "http://localhost:3000",
             "http://localhost:8080",
         ]
+
+    def test_config_rejects_wildcard_cors_origin(self) -> None:
+        from app.core.config import Settings
+
+        with pytest.raises(ValidationError, match="wildcard"):
+            Settings(cors_origins="*")
+
+    def test_config_strips_empty_cors_origins(self) -> None:
+        from app.core.config import Settings
+
+        settings = Settings(cors_origins="http://localhost:3000,,")
+        assert settings.cors_origins == ["http://localhost:3000"]
