@@ -1,3 +1,5 @@
+"""Middleware stack: CORS, correlation ID tracing, and rate limiting."""
+
 from asgi_correlation_id import CorrelationIdMiddleware
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware

@@ -1,3 +1,5 @@
+"""FastAPI application entry point with middleware and lifespan management."""
+
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -20,4 +22,5 @@ setup_middleware(app)
 
 @app.get("/health")
 async def health() -> dict[str, str]:
+    """Return service health status."""
     return {"status": "ok"}

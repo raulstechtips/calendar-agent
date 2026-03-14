@@ -1,3 +1,5 @@
+"""Application settings loaded from environment variables."""
+
 from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
@@ -35,6 +37,7 @@ class Settings(BaseSettings):
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, v: str | list[str]) -> list[str]:
+        """Parse comma-separated string or list, rejecting wildcard origins."""
         if isinstance(v, str):
             origins = [o.strip() for o in v.split(",") if o.strip()]
         else:
