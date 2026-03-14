@@ -1,0 +1,62 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(pnpm *)",
+      "Bash(npx *)",
+      "Bash(cd *)",
+      "Bash(ls *)",
+      "Bash(git status*)",
+      "Bash(git log*)",
+      "Bash(git diff*)",
+      "Bash(git branch*)",
+      "Bash(git checkout*)",
+      "Bash(git switch*)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git stash*)",
+      "Bash(git worktree *)",
+      "Bash(gh issue *)",
+      "Bash(gh pr *)",
+      "Bash(gh label *)",
+      "Bash(pytest*)",
+      "Bash(python -m pytest*)",
+      "Bash(uv *)",
+      "Bash(ruff *)",
+      "Bash(uvicorn *)",
+      "Bash(pip install *)",
+      "Bash(pip list*)",
+      "Bash(docker build *)",
+      "Bash(docker compose *)",
+      "Bash(terraform *)",
+      "Bash(mkdir *)",
+      "Bash(cat *)",
+      "Bash(which *)",
+      "Bash(node *)",
+      "Bash(python *)",
+      "Read",
+      "Edit",
+      "Write",
+      "Glob",
+      "Grep"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(git push --force*)",
+      "Bash(git reset --hard*)",
+      "Bash(git clean -f*)"
+    ]
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/pre-stop-check.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

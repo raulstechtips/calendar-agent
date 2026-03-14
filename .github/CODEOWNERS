@@ -1,0 +1,11 @@
+# Global — all PRs require review from the repo owner
+* @raulstechtips
+
+# Infrastructure changes are extra sensitive
+infra/ @raulstechtips
+.github/ @raulstechtips
+docker-compose.yml @raulstechtips
+
+# Claude Code config — controls AI agent behavior
+CLAUDE.md @raulstechtips
+.claude/ @raulstechtips
