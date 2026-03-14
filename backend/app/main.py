@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.agents.router import router as agents_router
 from app.core.middleware import setup_middleware
 from app.core.redis import close_redis, get_redis
 
@@ -24,6 +25,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 app = FastAPI(title="AI Calendar Assistant", lifespan=lifespan)
 
 setup_middleware(app)
+
+
+app.include_router(agents_router)
 
 
 @app.get("/health")

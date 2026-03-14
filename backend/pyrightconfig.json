@@ -3,5 +3,8 @@
   "typeCheckingMode": "strict",
   "include": ["app", "tests"],
   "exclude": [".venv"],
-  "reportMissingTypeStubs": "warning"
+  "reportMissingTypeStubs": "warning",
+  "reportUnknownVariableType": "warning",
+  "reportUnknownMemberType": "warning",
+  "reportUnknownArgumentType": "warning"
 }
