@@ -17,7 +17,8 @@ def setup_middleware(app: FastAPI) -> None:
     """Register middleware stack. Order is LIFO — last added = outermost."""
     # Rate limiting (innermost — applied last)
     app.state.limiter = limiter
-    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    # slowapi's handler is typed for RateLimitExceeded, but Starlette expects Exception
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
     app.add_middleware(SlowAPIMiddleware)
 
     # Correlation ID (middle)

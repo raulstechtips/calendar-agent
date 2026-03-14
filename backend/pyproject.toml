@@ -24,6 +24,8 @@ dev = [
     "pytest",
     "pytest-asyncio",
     "httpx",
+    "mypy>=1.19.1",
+    "pyright>=1.1.408",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -39,6 +41,25 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+warn_unreachable = true
+plugins = ["pydantic.mypy"]
+exclude = ["\\.venv"]
+
+# Only slowapi lacks py.typed — all other deps ship inline types
+[[tool.mypy.overrides]]
+module = ["slowapi.*"]
+ignore_missing_imports = true
+
+# Tests: relax decorator strictness for pytest fixtures
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_decorators = false
 
 [build-system]
 requires = ["hatchling"]

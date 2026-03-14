@@ -19,7 +19,9 @@ Azure OpenAI (GPT-4o) as LLM backbone, Azure AI Search as vector store.
 - Backend dev: `cd backend && uv run uvicorn app.main:app --reload`
 - Frontend tests: `cd frontend && pnpm test`
 - Backend tests: `cd backend && uv run pytest`
-- Type check: `cd frontend && pnpm typecheck`
+- Type check frontend: `cd frontend && pnpm typecheck`
+- Type check backend (mypy): `cd backend && uv run mypy .`
+- Type check backend (pyright): `cd backend && uv run pyright`
 - Lint frontend: `cd frontend && pnpm lint`
 - Lint backend: `cd backend && uv run ruff check .`
 - Format backend: `cd backend && uv run ruff format .`

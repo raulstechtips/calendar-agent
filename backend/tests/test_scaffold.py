@@ -98,7 +98,8 @@ class TestRateLimiting:
         from slowapi.middleware import SlowAPIMiddleware
 
         middleware_classes = [m.cls for m in app.user_middleware]
-        assert SlowAPIMiddleware in middleware_classes
+        # Starlette types middleware.cls as _MiddlewareFactory, not the concrete class
+        assert SlowAPIMiddleware in middleware_classes  # type: ignore[comparison-overlap]
 
     def test_limiter_configured_on_app_state(self) -> None:
         from slowapi import Limiter
@@ -118,7 +119,8 @@ class TestConfig:
     def test_config_parses_multiple_cors_origins(self) -> None:
         from app.core.config import Settings
 
-        settings = Settings(cors_origins="http://localhost:3000,http://localhost:8080")
+        # Testing Pydantic before-validator that parses str → list[str]
+        settings = Settings(cors_origins="http://localhost:3000,http://localhost:8080")  # pyright: ignore[reportArgumentType]
         assert settings.cors_origins == [
             "http://localhost:3000",
             "http://localhost:8080",
@@ -128,10 +130,10 @@ class TestConfig:
         from app.core.config import Settings
 
         with pytest.raises(ValidationError, match="wildcard"):
-            Settings(cors_origins="*")
+            Settings(cors_origins="*")  # pyright: ignore[reportArgumentType]
 
     def test_config_strips_empty_cors_origins(self) -> None:
         from app.core.config import Settings
 
-        settings = Settings(cors_origins="http://localhost:3000,,")
+        settings = Settings(cors_origins="http://localhost:3000,,")  # pyright: ignore[reportArgumentType]
         assert settings.cors_origins == ["http://localhost:3000"]
