@@ -525,6 +525,7 @@ GOOGLE_CLIENT_SECRET=
 - [ ] `uv run pytest` passes with zero failures
 - [ ] `pnpm typecheck` passes with zero errors
 - [ ] `ruff check backend/` passes with zero violations
+- [ ] `uv run mypy .` passes with zero errors
 - [ ] Both services run in Docker containers
 - [ ] Application deploys to Azure Container Apps
 

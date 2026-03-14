@@ -50,6 +50,8 @@ paths:
 - Use `interface` for component props (more extensible than `type`)
 - Use discriminated unions for mutually exclusive state, not boolean flags
 - Use `z.infer<typeof schema>` to derive types from Zod schemas — single source of truth
+- `noUncheckedIndexedAccess: true` — always check index access results for `undefined`
+- Never add `@ts-expect-error` without an explanatory comment describing why
 
 ## Documentation
 
