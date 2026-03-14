@@ -82,6 +82,14 @@ paths:
 - Requires checkpointer and `thread_id` in config
 - Emit structured SSE events before interrupting
 
+## Type Checking
+
+- `mypy --strict` and `pyright --strict` must both pass on the full backend project before considering work done
+- Never use `# type: ignore` without a specific error code (e.g. `# type: ignore[arg-type]`)
+- Never use `cast()` to paper over a real type error — fix the underlying issue
+- Use `TYPE_CHECKING` imports to avoid circular imports and runtime overhead
+- For third-party libraries without `py.typed`: add a per-module override in `[tool.mypy]`, never use blanket `ignore_missing_imports`
+
 ### Testing Agents
 - Use `GenericFakeChatModel` for deterministic LLM mocking
 - Unit test individual tools in isolation before testing the full graph
