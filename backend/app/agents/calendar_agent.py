@@ -3,26 +3,28 @@
 from langchain_core.language_models import BaseChatModel
 from langchain_openai import AzureChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
-from langgraph.prebuilt import create_react_agent
+from langgraph.graph.state import CompiledStateGraph
+from langgraph.prebuilt import create_react_agent  # pyright: ignore[reportDeprecated]
+from pydantic import SecretStr
 
 from app.agents.prompts import build_prompt
 from app.agents.state import AgentState
 from app.core.config import settings
 
-_agent = None
+_agent: CompiledStateGraph | None = None  # type: ignore[type-arg]
 
 
 def get_llm() -> AzureChatOpenAI:
     """Create AzureChatOpenAI instance configured from settings."""
     return AzureChatOpenAI(
         azure_endpoint=settings.azure_openai_endpoint,
-        api_key=settings.azure_openai_api_key,
+        api_key=SecretStr(settings.azure_openai_api_key),
         azure_deployment=settings.azure_openai_deployment,
         api_version=settings.azure_openai_api_version,
     )
 
 
-def create_agent(llm: BaseChatModel | None = None):
+def create_agent(llm: BaseChatModel | None = None) -> CompiledStateGraph:  # type: ignore[type-arg]
     """Create and compile the ReAct agent graph.
 
     Args:
@@ -31,7 +33,7 @@ def create_agent(llm: BaseChatModel | None = None):
     if llm is None:
         llm = get_llm()
     checkpointer = MemorySaver()
-    return create_react_agent(
+    return create_react_agent(  # pyright: ignore[reportDeprecated]
         model=llm,
         tools=[],  # Tools added in #17
         checkpointer=checkpointer,
@@ -40,7 +42,7 @@ def create_agent(llm: BaseChatModel | None = None):
     )
 
 
-def get_agent():
+def get_agent() -> CompiledStateGraph:  # type: ignore[type-arg]
     """Return the singleton agent instance, creating it on first call."""
     global _agent
     if _agent is None:

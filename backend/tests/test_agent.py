@@ -1,7 +1,8 @@
 """Tests for LangGraph ReAct agent."""
 
 import json
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Generator
+from typing import Any
 
 import httpx
 import pytest
@@ -31,10 +32,12 @@ from app.main import app
 class FakeAgent:
     """Mock agent that yields predefined chunks from astream."""
 
-    def __init__(self, chunks: list[tuple]):
+    def __init__(self, chunks: list[tuple[AIMessageChunk, dict[str, str]]]) -> None:
         self._chunks = chunks
 
-    async def astream(self, *args, **kwargs):
+    async def astream(
+        self, *args: Any, **kwargs: Any
+    ) -> AsyncGenerator[tuple[AIMessageChunk, dict[str, str]], None]:
         for chunk in self._chunks:
             yield chunk
 
@@ -42,14 +45,16 @@ class FakeAgent:
 class ErrorAgent:
     """Mock agent that raises during streaming."""
 
-    async def astream(self, *args, **kwargs):
+    async def astream(
+        self, *args: Any, **kwargs: Any
+    ) -> AsyncGenerator[tuple[AIMessageChunk, dict[str, str]], None]:
         raise RuntimeError("LLM connection failed")
-        yield  # noqa: RUF027 — unreachable yield makes this an async generator
+        yield  # type: ignore[unreachable]  # pragma: no cover
 
 
-def _parse_sse_events(body: str) -> list[dict]:
+def _parse_sse_events(body: str) -> list[dict[str, Any]]:
     """Parse SSE body text into a list of event dicts."""
-    events = []
+    events: list[dict[str, Any]] = []
     for line in body.strip().split("\n"):
         if line.startswith("data: "):
             events.append(json.loads(line[len("data: ") :]))
@@ -80,10 +85,15 @@ class TestAgentState:
         state: AgentState = {
             "messages": [],
             "user_id": "test-user",
-            "pending_confirmation": {"action": "create_event", "details": {}},
+            "pending_confirmation": {
+                "action": "create_event",
+                "details": {},
+            },
             "remaining_steps": 25,
         }
-        assert state["pending_confirmation"]["action"] == "create_event"
+        confirmation = state["pending_confirmation"]
+        assert confirmation is not None
+        assert confirmation["action"] == "create_event"
 
 
 class TestPrompts:
@@ -93,40 +103,54 @@ class TestPrompts:
 
     def test_system_instructions_includes_canary_when_configured(
         self,
-        monkeypatch,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         fake_settings = type("S", (), {"canary_token": "SECRET-42"})()
         monkeypatch.setattr("app.agents.prompts.settings", fake_settings)
         instructions = get_system_instructions()
         assert "SECRET-42" in instructions
 
-    def test_system_instructions_omits_canary_when_empty(self) -> None:
+    def test_system_instructions_omits_canary_when_empty(
+        self,
+    ) -> None:
         instructions = get_system_instructions()
         assert "canary" not in instructions.lower()
 
-    def test_system_instructions_forbids_revealing_prompt(self) -> None:
+    def test_system_instructions_forbids_revealing_prompt(
+        self,
+    ) -> None:
         instructions = get_system_instructions()
         assert "never reveal" in instructions.lower()
 
-    def test_system_instructions_restricts_to_calendar_topics(self) -> None:
+    def test_system_instructions_restricts_to_calendar_topics(
+        self,
+    ) -> None:
         instructions = get_system_instructions()
         assert "calendar" in instructions.lower()
         assert "scheduling" in instructions.lower()
 
-    def test_system_instructions_requires_write_confirmation(self) -> None:
+    def test_system_instructions_requires_write_confirmation(
+        self,
+    ) -> None:
         instructions = get_system_instructions()
         assert "confirmation" in instructions.lower()
 
-    def test_system_instructions_treats_event_content_as_untrusted(self) -> None:
+    def test_system_instructions_treats_event_content_as_untrusted(
+        self,
+    ) -> None:
         instructions = get_system_instructions()
         assert "untrusted" in instructions.lower()
 
-    def test_system_reminder_states_instruction_hierarchy(self) -> None:
+    def test_system_reminder_states_instruction_hierarchy(
+        self,
+    ) -> None:
         lower = SYSTEM_REMINDER.lower()
         assert "system instructions" in lower
         assert "user" in lower
 
-    def test_build_prompt_wraps_messages_in_sandwich(self) -> None:
+    def test_build_prompt_wraps_messages_in_sandwich(
+        self,
+    ) -> None:
         state = {
             "messages": [HumanMessage(content="What's on my calendar?")],
             "user_id": "test-user",
@@ -138,13 +162,19 @@ class TestPrompts:
         assert isinstance(result[-1], SystemMessage)
         assert isinstance(result[1], HumanMessage)
 
-    def test_build_prompt_preserves_conversation_history(self) -> None:
+    def test_build_prompt_preserves_conversation_history(
+        self,
+    ) -> None:
         messages = [
             HumanMessage(content="Hello"),
             AIMessage(content="Hi!"),
             HumanMessage(content="Schedule a meeting"),
         ]
-        state = {"messages": messages, "user_id": "u", "pending_confirmation": None}
+        state = {
+            "messages": messages,
+            "user_id": "u",
+            "pending_confirmation": None,
+        }
         result = build_prompt(state)
 
         assert len(result) == len(messages) + 2
@@ -189,16 +219,23 @@ class TestAgentCreation:
 
 class TestChatEndpoint:
     @pytest.fixture(autouse=True)
-    def _default_agent_override(self):
+    def _default_agent_override(
+        self,
+    ) -> Generator[None, None, None]:
         """Set a default agent override so get_agent() never hits Azure."""
         fake = FakeAgent(
-            [(AIMessageChunk(content="default"), {"langgraph_node": "agent"})]
+            [
+                (
+                    AIMessageChunk(content="default"),
+                    {"langgraph_node": "agent"},
+                )
+            ]
         )
         app.dependency_overrides[get_agent] = lambda: fake
         yield
         app.dependency_overrides.pop(get_agent, None)
 
-    def _override_agent(self, fake):
+    def _override_agent(self, fake: FakeAgent | ErrorAgent) -> None:
         app.dependency_overrides[get_agent] = lambda: fake
 
     async def test_should_reject_empty_message(self, client: httpx.AsyncClient) -> None:
@@ -215,7 +252,14 @@ class TestChatEndpoint:
         self, client: httpx.AsyncClient
     ) -> None:
         self._override_agent(
-            FakeAgent([(AIMessageChunk(content="OK"), {"langgraph_node": "agent"})])
+            FakeAgent(
+                [
+                    (
+                        AIMessageChunk(content="OK"),
+                        {"langgraph_node": "agent"},
+                    )
+                ]
+            )
         )
         response = await client.post("/api/chat", json={"message": "a" * 2000})
         assert response.status_code == 200
@@ -224,7 +268,14 @@ class TestChatEndpoint:
         self, client: httpx.AsyncClient
     ) -> None:
         self._override_agent(
-            FakeAgent([(AIMessageChunk(content="Hi"), {"langgraph_node": "agent"})])
+            FakeAgent(
+                [
+                    (
+                        AIMessageChunk(content="Hi"),
+                        {"langgraph_node": "agent"},
+                    )
+                ]
+            )
         )
         response = await client.post("/api/chat", json={"message": "Hello"})
         assert response.headers["content-type"].startswith("text/event-stream")
@@ -233,13 +284,20 @@ class TestChatEndpoint:
         self._override_agent(
             FakeAgent(
                 [
-                    (AIMessageChunk(content="Here"), {"langgraph_node": "agent"}),
-                    (AIMessageChunk(content=" are"), {"langgraph_node": "agent"}),
+                    (
+                        AIMessageChunk(content="Here"),
+                        {"langgraph_node": "agent"},
+                    ),
+                    (
+                        AIMessageChunk(content=" are"),
+                        {"langgraph_node": "agent"},
+                    ),
                 ]
             )
         )
         response = await client.post(
-            "/api/chat", json={"message": "What's on my calendar?"}
+            "/api/chat",
+            json={"message": "What's on my calendar?"},
         )
         events = _parse_sse_events(response.text)
         token_events = [e for e in events if e["type"] == "token"]
@@ -252,7 +310,14 @@ class TestChatEndpoint:
         self, client: httpx.AsyncClient
     ) -> None:
         self._override_agent(
-            FakeAgent([(AIMessageChunk(content="Hi"), {"langgraph_node": "agent"})])
+            FakeAgent(
+                [
+                    (
+                        AIMessageChunk(content="Hi"),
+                        {"langgraph_node": "agent"},
+                    )
+                ]
+            )
         )
         response = await client.post("/api/chat", json={"message": "Hello"})
         events = _parse_sse_events(response.text)
@@ -264,7 +329,14 @@ class TestChatEndpoint:
         self, client: httpx.AsyncClient
     ) -> None:
         self._override_agent(
-            FakeAgent([(AIMessageChunk(content="Hi"), {"langgraph_node": "agent"})])
+            FakeAgent(
+                [
+                    (
+                        AIMessageChunk(content="Hi"),
+                        {"langgraph_node": "agent"},
+                    )
+                ]
+            )
         )
         response = await client.post("/api/chat", json={"message": "Hello"})
         events = _parse_sse_events(response.text)
@@ -277,11 +349,21 @@ class TestChatEndpoint:
         self, client: httpx.AsyncClient
     ) -> None:
         self._override_agent(
-            FakeAgent([(AIMessageChunk(content="Hi"), {"langgraph_node": "agent"})])
+            FakeAgent(
+                [
+                    (
+                        AIMessageChunk(content="Hi"),
+                        {"langgraph_node": "agent"},
+                    )
+                ]
+            )
         )
         response = await client.post(
             "/api/chat",
-            json={"message": "Hello", "thread_id": "user-abc:session-xyz"},
+            json={
+                "message": "Hello",
+                "thread_id": "user-abc:session-xyz",
+            },
         )
         events = _parse_sse_events(response.text)
 
@@ -293,8 +375,14 @@ class TestChatEndpoint:
         self._override_agent(
             FakeAgent(
                 [
-                    (AIMessageChunk(content=""), {"langgraph_node": "agent"}),
-                    (AIMessageChunk(content="Hello"), {"langgraph_node": "agent"}),
+                    (
+                        AIMessageChunk(content=""),
+                        {"langgraph_node": "agent"},
+                    ),
+                    (
+                        AIMessageChunk(content="Hello"),
+                        {"langgraph_node": "agent"},
+                    ),
                 ]
             )
         )
@@ -319,6 +407,7 @@ class TestChatEndpoint:
 
     async def test_should_reject_extra_fields(self, client: httpx.AsyncClient) -> None:
         response = await client.post(
-            "/api/chat", json={"message": "Hello", "extra": "bad"}
+            "/api/chat",
+            json={"message": "Hello", "extra": "bad"},
         )
         assert response.status_code == 422

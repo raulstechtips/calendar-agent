@@ -1,7 +1,8 @@
 """LangGraph agent state definition."""
 
-from typing import Annotated, TypedDict
+from typing import Annotated, Any, TypedDict
 
+from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
 
 
@@ -14,7 +15,7 @@ class AgentState(TypedDict):
         pending_confirmation: Details of a write action awaiting user approval.
     """
 
-    messages: Annotated[list, add_messages]
+    messages: Annotated[list[BaseMessage], add_messages]
     user_id: str
-    pending_confirmation: dict | None
+    pending_confirmation: dict[str, Any] | None
     remaining_steps: int

@@ -3,10 +3,12 @@
 import json
 import logging
 import uuid
+from collections.abc import AsyncGenerator
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessageChunk, HumanMessage
+from langgraph.graph.state import CompiledStateGraph
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.agents.calendar_agent import build_thread_id, get_agent
@@ -23,7 +25,12 @@ class ChatRequest(BaseModel):
     thread_id: str | None = Field(None, max_length=200)
 
 
-async def _stream_response(agent, message: str, thread_id: str, user_id: str):
+async def _stream_response(
+    agent: CompiledStateGraph,  # type: ignore[type-arg]
+    message: str,
+    thread_id: str,
+    user_id: str,
+) -> AsyncGenerator[str, None]:
     """Stream agent response as SSE events."""
     try:
         async for chunk, _metadata in agent.astream(
@@ -53,8 +60,8 @@ async def _stream_response(agent, message: str, thread_id: str, user_id: str):
 @router.post("/api/chat")
 async def chat(
     request: ChatRequest,
-    agent=Depends(get_agent),  # noqa: B008
-):
+    agent: CompiledStateGraph = Depends(get_agent),  # type: ignore[type-arg]  # noqa: B008
+) -> StreamingResponse:
     """Send a message to the agent and receive an SSE stream response."""
     # TODO: Replace with real auth from #9/#10/#11
     user_id = "dev-user"

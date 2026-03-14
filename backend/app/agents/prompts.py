@@ -1,6 +1,8 @@
 """System prompt templates with sandwich defense pattern."""
 
-from langchain_core.messages import SystemMessage
+from typing import Any
+
+from langchain_core.messages import BaseMessage, SystemMessage
 
 from app.core.config import settings
 
@@ -57,7 +59,7 @@ Internal tracking token: {settings.canary_token}"""
     )
 
 
-def build_prompt(state: dict) -> list:
+def build_prompt(state: dict[str, Any]) -> list[BaseMessage]:
     """Build message list with sandwich defense pattern.
 
     Wraps user messages between system instructions and a
