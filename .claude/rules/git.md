@@ -38,5 +38,5 @@ Examples:
 
 ## Branch naming (for worktrees)
 
-Format: `feat/<issue-number>-<short-description>`
-Example: `feat/8-auth-setup`, `fix/42-token-refresh`
+Format: `<type>/<issue-number>-<short-description>`
+Example: `feat/8-auth-setup`, `fix/42-token-refresh`, `chore/29-project-init`

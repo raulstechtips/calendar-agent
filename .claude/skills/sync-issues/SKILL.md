@@ -19,10 +19,10 @@ Review the current state of GitHub issues and sync them with reality.
 
 2. **Check code state** — for each in-progress issue, verify if the work described in its acceptance criteria is actually done by checking the file scope listed in the issue.
 
-3. **Update statuses**:
-   - If acceptance criteria are met → move to `status:done`
-   - If work hasn't started → keep at `status:todo`
-   - If dependencies aren't met → move to `status:blocked`
+3. **Update statuses** (labels must be mutually exclusive — always remove old status):
+   - If acceptance criteria are met → `gh issue edit <number> --add-label "status:done" --remove-label "status:in-progress" --remove-label "status:todo"`
+   - If work hasn't started → keep at `status:todo` (no action needed)
+   - If dependencies aren't met → `gh issue edit <number> --add-label "status:blocked" --remove-label "status:todo" --remove-label "status:in-progress"`
 
 4. **Report summary**:
    - Total: X stories

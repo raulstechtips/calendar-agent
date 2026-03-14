@@ -13,9 +13,9 @@ Find the highest-priority unblocked story to work on next.
 
 1. **Read the spec** at `.claude/specs/in-progress/SPEC.md` for current context.
 
-2. **Get available stories**:
+2. **Get available stories** (excluding blocked):
    ```bash
-   gh issue list --label "type:story" --label "status:todo" --json number,title,body,labels --jq '.[] | "#\(.number) [\(.labels | map(.name) | join(", "))] \(.title)"'
+   gh issue list --label "type:story" --label "status:todo" --json number,title,body,labels --jq '[.[] | select(.labels | map(.name) | contains(["status:blocked"]) | not)] | .[] | "#\(.number) [\(.labels | map(.name) | join(", "))] \(.title)"'
    ```
 
 3. **Check dependencies** — for each candidate, read the issue body and verify its dependencies are completed (issues referenced in "Dependencies" section should be `status:done`).

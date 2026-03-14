@@ -23,4 +23,4 @@ Report findings as:
 - **WARNING** (should fix)
 - **SUGGESTION** (consider for later)
 
-Always run `ruff check` and `pnpm typecheck` as part of your review.
+Always run `(cd backend && uv run ruff check .)` and `(cd frontend && pnpm typecheck)` as part of your review.

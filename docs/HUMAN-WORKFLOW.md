@@ -41,7 +41,7 @@ claude --worktree agent-work
 
 Then give each agent its task:
 
-```
+```text
 Read the spec at .claude/specs/in-progress/SPEC.md, then work on issue #8.
 Run `gh issue view 8` to read the full acceptance criteria.
 Mark the issue in-progress: `gh issue edit 8 --add-label "status:in-progress" --remove-label "status:todo"`
@@ -79,7 +79,7 @@ claude --worktree agent-work --tmux
 
 ## Your Loop (Every 10-15 Minutes)
 
-```
+```text
 ┌─────────────────────┐
 │ Glance at all panes  │
 │ Is anyone stuck?      │──── Yes ──→ Intervene (see below)
@@ -198,7 +198,7 @@ git push origin main
 
 When you make a decision that changes the spec (e.g., "let's use X instead of Y"), tell Claude:
 
-```
+```text
 /update-decision We're switching from Auth.js to better-auth because [reason]
 ```
 
