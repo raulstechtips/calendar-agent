@@ -11,7 +11,7 @@ FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty' 2>/dev/null)
 
 # Check if the file is a test file
 case "$FILE_PATH" in
-  test_*|*/test_*|*.test.*|*/*.test.*|*.spec.*|*/*.spec.*|__tests__/*|*/__tests__/*)
+  test_*|*/test_*|*.test.*|*.spec.*|__tests__/*|*/__tests__/*)
     # Allow if this is explicitly a test-writing task
     # (Claude will be told to set this env var when writing tests)
     if [ "${WRITING_TESTS:-0}" = "1" ]; then

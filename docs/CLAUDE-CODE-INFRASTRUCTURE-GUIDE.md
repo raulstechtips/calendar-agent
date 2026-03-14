@@ -19,7 +19,7 @@ A step-by-step guide for setting up a production-grade Claude Code development e
 8. [Phase 5: Agents — Specialized Bots](#phase-5-agents--specialized-bots)
 9. [Phase 6: Hooks — Automated Enforcement](#phase-6-hooks--automated-enforcement)
 10. [Phase 7: Skills — Custom Slash Commands](#phase-7-skills--custom-slash-commands)
-11. [Phase 8: Settings — Permissions & Safety](#phase-8-settings--permissions--safety)
+11. [Phase 8: Settings — Permissions and Safety](#phase-8-settings--permissions-and-safety)
 12. [Phase 9: GitHub Issues & Labels](#phase-9-github-issues--labels)
 13. [Phase 10: External Skills](#phase-10-external-skills)
 14. [Phase 11: Branch Protection & CODEOWNERS](#phase-11-branch-protection--codeowners)
@@ -544,7 +544,7 @@ When the human makes a decision, this skill:
 
 ---
 
-## Phase 8: Settings — Permissions & Safety
+## Phase 8: Settings — Permissions and Safety
 
 ### `.claude/settings.json` (committed to git)
 
@@ -623,30 +623,30 @@ Create these labels on your GitHub repo. Adjust area labels to match your projec
 
 ```bash
 # Type labels
-gh label create "type:epic" --color "7B68EE" --description "Top-level initiative"
-gh label create "type:feature" --color "4169E1" --description "Feature under an epic"
-gh label create "type:story" --color "6495ED" --description "Implementable unit of work"
-gh label create "type:bug" --color "DC143C" --description "Bug report"
-gh label create "type:spike" --color "FF8C00" --description "Research/investigation task"
+gh label create --force "type:epic" --color "7B68EE" --description "Top-level initiative"
+gh label create --force "type:feature" --color "4169E1" --description "Feature under an epic"
+gh label create --force "type:story" --color "6495ED" --description "Implementable unit of work"
+gh label create --force "type:bug" --color "DC143C" --description "Bug report"
+gh label create --force "type:spike" --color "FF8C00" --description "Research/investigation task"
 
 # Status labels (mutually exclusive)
-gh label create "status:todo" --color "EEEEEE" --description "Ready to be picked up"
-gh label create "status:in-progress" --color "FFFF00" --description "Currently being worked on"
-gh label create "status:blocked" --color "FF4500" --description "Blocked by dependency"
-gh label create "status:done" --color "2E8B57" --description "Completed"
+gh label create --force "status:todo" --color "EEEEEE" --description "Ready to be picked up"
+gh label create --force "status:in-progress" --color "FFFF00" --description "Currently being worked on"
+gh label create --force "status:blocked" --color "FF4500" --description "Blocked by dependency"
+gh label create --force "status:done" --color "2E8B57" --description "Completed"
 
 # Priority labels
-gh label create "priority:critical" --color "8B0000" --description "Must ship"
-gh label create "priority:high" --color "FF6347" --description "Important for MVP"
-gh label create "priority:medium" --color "FFA07A" --description "Nice to have"
+gh label create --force "priority:critical" --color "8B0000" --description "Must ship"
+gh label create --force "priority:high" --color "FF6347" --description "Important for MVP"
+gh label create --force "priority:medium" --color "FFA07A" --description "Nice to have"
 
 # Area labels (customize per project)
-gh label create "area:{AREA1}" --color "{COLOR}" --description "{DESCRIPTION}"
-gh label create "area:{AREA2}" --color "{COLOR}" --description "{DESCRIPTION}"
+gh label create --force "area:{AREA1}" --color "{COLOR}" --description "{DESCRIPTION}"
+gh label create --force "area:{AREA2}" --color "{COLOR}" --description "{DESCRIPTION}"
 
 # Sprint labels (optional)
-gh label create "sprint:day1" --color "1E90FF" --description "Day 1 of sprint"
-gh label create "sprint:day2" --color "00CED1" --description "Day 2 of sprint"
+gh label create --force "sprint:day1" --color "1E90FF" --description "Day 1 of sprint"
+gh label create --force "sprint:day2" --color "00CED1" --description "Day 2 of sprint"
 ```
 
 ### Issue Hierarchy
