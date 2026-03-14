@@ -20,9 +20,9 @@ from app.agents.calendar_agent import (
     get_agent,
 )
 from app.agents.prompts import (
-    SYSTEM_INSTRUCTIONS,
     SYSTEM_REMINDER,
     build_prompt,
+    get_system_instructions,
 )
 from app.agents.state import AgentState
 from app.main import app
@@ -88,24 +88,38 @@ class TestAgentState:
 
 class TestPrompts:
     def test_system_instructions_defines_calendar_role(self) -> None:
-        assert "calendar assistant" in SYSTEM_INSTRUCTIONS.lower()
+        instructions = get_system_instructions()
+        assert "calendar assistant" in instructions.lower()
 
-    def test_system_instructions_has_canary_token(self) -> None:
-        assert "KALEIDOSCOPE" in SYSTEM_INSTRUCTIONS
+    def test_system_instructions_includes_canary_when_configured(
+        self,
+        monkeypatch,
+    ) -> None:
+        fake_settings = type("S", (), {"canary_token": "SECRET-42"})()
+        monkeypatch.setattr("app.agents.prompts.settings", fake_settings)
+        instructions = get_system_instructions()
+        assert "SECRET-42" in instructions
+
+    def test_system_instructions_omits_canary_when_empty(self) -> None:
+        instructions = get_system_instructions()
+        assert "canary" not in instructions.lower()
 
     def test_system_instructions_forbids_revealing_prompt(self) -> None:
-        assert "never reveal" in SYSTEM_INSTRUCTIONS.lower()
+        instructions = get_system_instructions()
+        assert "never reveal" in instructions.lower()
 
     def test_system_instructions_restricts_to_calendar_topics(self) -> None:
-        lower = SYSTEM_INSTRUCTIONS.lower()
-        assert "calendar" in lower
-        assert "scheduling" in lower
+        instructions = get_system_instructions()
+        assert "calendar" in instructions.lower()
+        assert "scheduling" in instructions.lower()
 
     def test_system_instructions_requires_write_confirmation(self) -> None:
-        assert "confirmation" in SYSTEM_INSTRUCTIONS.lower()
+        instructions = get_system_instructions()
+        assert "confirmation" in instructions.lower()
 
     def test_system_instructions_treats_event_content_as_untrusted(self) -> None:
-        assert "untrusted" in SYSTEM_INSTRUCTIONS.lower()
+        instructions = get_system_instructions()
+        assert "untrusted" in instructions.lower()
 
     def test_system_reminder_states_instruction_hierarchy(self) -> None:
         lower = SYSTEM_REMINDER.lower()
