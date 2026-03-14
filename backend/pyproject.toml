@@ -1,0 +1,45 @@
+[project]
+name = "calendar-agent-backend"
+version = "0.1.0"
+description = "AI Calendar Assistant — FastAPI backend with LangGraph agents"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi[standard]>=0.135.1",
+    "langgraph>=1.1.0",
+    "langgraph-prebuilt>=1.0.8",
+    "langchain-core>=1.2.19",
+    "langchain-openai>=1.1.10",
+    "langchain-google-community[calendar]>=3.0.5",
+    "azure-search-documents>=11.6.0",
+    "azure-ai-contentsafety>=1.0.0",
+    "redis[hiredis]>=7.1.1",
+    "slowapi>=0.1.9",
+    "asgi-correlation-id>=4.3.0",
+    "cryptography",
+]
+
+[dependency-groups]
+dev = [
+    "ruff",
+    "pytest",
+    "pytest-asyncio",
+    "httpx",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
