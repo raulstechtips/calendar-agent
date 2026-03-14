@@ -1,3 +1,8 @@
+/**
+ * Auth.js v5 configuration with Google OAuth provider.
+ * Requests offline access for refresh tokens and captures OAuth tokens
+ * in the JWT for downstream use by the backend agent.
+ */
 import NextAuth, { type DefaultSession } from "next-auth";
 import Google from "next-auth/providers/google";
 
