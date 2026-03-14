@@ -45,7 +45,7 @@ Then give each agent its task:
 Read the spec at .claude/specs/in-progress/SPEC.md, then work on issue #8.
 Run `gh issue view 8` to read the full acceptance criteria.
 Mark the issue in-progress: `gh issue edit 8 --add-label "status:in-progress" --remove-label "status:todo"`
-When done, commit and update the issue status.
+When done, commit, update the issue label to `status:done`, and create a PR.
 ```
 
 ### Option B: tmux (monitor all at once)
@@ -160,6 +160,7 @@ cd backend && uv run pytest
 
 # 5. Update the GitHub issue
 gh issue edit 8 --add-label "status:done" --remove-label "status:in-progress"
+# Issue closes automatically when the PR is merged
 
 # 6. Clean up the worktree
 git worktree remove .claude/worktrees/frontend-work
@@ -223,7 +224,7 @@ git push origin main
 
 # 5. Update issues
 gh issue list -R raulstechtips/calendar-agent --label "status:in-progress"
-# Close completed ones, add comments to in-progress ones
+# Verify completed ones have `status:done` label — issues close automatically when PRs merge
 
 # 6. Document progress (optional but recommended between days)
 # Have Claude write a progress summary:
@@ -261,7 +262,7 @@ Starting Day 2:
 | Merge worktree | `git checkout main && git merge worktree-<name>` |
 | Clean up worktree | `git worktree remove .claude/worktrees/<name>` |
 | Check issue status | `gh issue list --label "status:in-progress"` |
-| Update issue | `gh issue edit <n> --add-label "status:done" --remove-label "status:in-progress"` |
+| Update issue (done) | `gh issue edit <n> --add-label "status:done" --remove-label "status:in-progress"` (issue auto-closes on PR merge) |
 | Compact context | `/compact focus on [current task]` |
 | Clear and restart | `/clear` |
 | Resume last session | `claude --continue` |

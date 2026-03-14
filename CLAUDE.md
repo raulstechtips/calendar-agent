@@ -44,7 +44,7 @@ IMPORTANT: Follow these rules strictly:
 - ALWAYS run tests after making changes
 - ALWAYS run lint and typecheck before considering work done
 - Before writing code, read the active spec in `.claude/specs/in-progress/`
-- Track work via GitHub Issues — pick stories labeled `status:todo`, mark `status:in-progress`, close when done
+- Track work via GitHub Issues — pick stories labeled `status:todo`, mark `status:in-progress`; when done update label to `status:done` and create a PR (the issue closes automatically when the PR merges)
 - Commit after each completed task with conventional commits referencing the issue number
 - If uncertain about approach, ASK before proceeding
 - When starting a session, check project state: `git log --oneline -10 && gh issue list --label "status:todo" --label "status:in-progress"`

@@ -17,7 +17,11 @@ Follow this exact process for every story/task:
 7. **Refactor** while tests stay green
 8. **Verify**: run the full verification suite for your area
 9. **Commit**: conventional commit referencing the issue number
-10. **Update issue**: `gh issue edit <n> --add-label "status:done" --remove-label "status:in-progress"`
+10. **Update issue and open PR**:
+    ```bash
+    gh issue edit <n> --add-label "status:done" --remove-label "status:in-progress"
+    ```
+    Then create a PR referencing the issue (`Closes #<n>` in the PR body). The issue closes automatically when the PR is merged.
 
 ## When to ask the human
 
