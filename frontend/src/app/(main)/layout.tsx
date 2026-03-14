@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth, signOut } from "../../../auth";
 
@@ -13,31 +14,33 @@ export default async function MainLayout({
     redirect("/login");
   }
 
+  const displayName = session.user.name ?? session.user.email ?? "Account";
+
   return (
     <div className="flex min-h-screen">
-      <aside className="hidden w-64 border-r border-border bg-sidebar p-4 md:block">
+      <aside className="hidden w-64 flex-col border-r border-border bg-sidebar p-4 md:flex">
         <nav className="flex flex-col gap-2">
           <span className="mb-4 text-lg font-semibold text-sidebar-foreground">
             Calendar Assistant
           </span>
-          <a
+          <Link
             href="/chat"
             className="rounded-md px-3 py-2 text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-accent"
           >
             Chat
-          </a>
-          <a
+          </Link>
+          <Link
             href="/calendar"
             className="rounded-md px-3 py-2 text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-accent"
           >
             Calendar
-          </a>
-          <a
+          </Link>
+          <Link
             href="/settings"
             className="rounded-md px-3 py-2 text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-accent"
           >
             Settings
-          </a>
+          </Link>
         </nav>
         <div className="mt-auto pt-4">
           <div className="flex items-center gap-2 text-sm text-sidebar-foreground">
@@ -50,7 +53,7 @@ export default async function MainLayout({
                 height={32}
               />
             )}
-            <span className="truncate">{session.user.name}</span>
+            <span className="truncate">{displayName}</span>
           </div>
           <form
             action={async () => {
