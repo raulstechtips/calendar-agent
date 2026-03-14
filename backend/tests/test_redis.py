@@ -7,13 +7,13 @@ import httpx
 import pytest
 from httpx import ASGITransport
 
-import app.core.redis as redis_module
+from app.core.redis import reset_redis
 from app.main import app
 
 
 @pytest.fixture(autouse=True)
-def _reset_redis_singleton() -> None:
-    redis_module._redis_client = None
+def _reset_redis_singleton() -> None:  # pyright: ignore[reportUnusedFunction]
+    reset_redis()
 
 
 @pytest.fixture
@@ -42,8 +42,8 @@ class TestRedisClient:
         from app.core.redis import get_redis
 
         client = get_redis()
-        connection_kwargs = client.connection_pool.connection_kwargs
-        assert connection_kwargs.get("decode_responses") is True
+        connection_kwargs = client.connection_pool.connection_kwargs  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+        assert connection_kwargs.get("decode_responses") is True  # pyright: ignore[reportUnknownMemberType]
 
     def test_redis_supports_tls_url(self) -> None:
         from redis.asyncio.connection import SSLConnection
@@ -107,7 +107,9 @@ class TestRedisLifecycle:
         client = get_redis()
         with patch.object(client, "aclose", new_callable=AsyncMock):
             await close_redis()
-        assert redis_module._redis_client is None
+        from app.core.redis import has_redis_client
+
+        assert not has_redis_client()
 
     async def test_close_redis_is_safe_when_no_client(self) -> None:
         from app.core.redis import close_redis

@@ -9,7 +9,7 @@ _redis_client: Redis | None = None
 
 def create_redis(url: str) -> Redis:
     """Create a new async Redis client from a URL."""
-    return Redis.from_url(url, decode_responses=True)
+    return Redis.from_url(url, decode_responses=True)  # pyright: ignore[reportUnknownMemberType]
 
 
 def get_redis() -> Redis:
@@ -26,3 +26,14 @@ async def close_redis() -> None:
     if _redis_client is not None:
         await _redis_client.aclose()
         _redis_client = None
+
+
+def reset_redis() -> None:
+    """Clear the singleton without closing. For test isolation only."""
+    global _redis_client
+    _redis_client = None
+
+
+def has_redis_client() -> bool:
+    """Check whether a singleton Redis client is currently cached."""
+    return _redis_client is not None
