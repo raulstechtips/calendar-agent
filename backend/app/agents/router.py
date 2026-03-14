@@ -66,7 +66,7 @@ async def chat(
     # TODO: Replace with real auth from #9/#10/#11
     user_id = "dev-user"
 
-    if request.thread_id:
+    if request.thread_id and request.thread_id.startswith(f"user-{user_id}:session-"):
         thread_id = request.thread_id
     else:
         session_id = uuid.uuid4().hex[:12]

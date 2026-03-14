@@ -362,12 +362,12 @@ class TestChatEndpoint:
             "/api/chat",
             json={
                 "message": "Hello",
-                "thread_id": "user-abc:session-xyz",
+                "thread_id": "user-dev-user:session-existing",
             },
         )
         events = _parse_sse_events(response.text)
 
-        assert events[-1]["thread_id"] == "user-abc:session-xyz"
+        assert events[-1]["thread_id"] == "user-dev-user:session-existing"
 
     async def test_should_skip_empty_content_chunks(
         self, client: httpx.AsyncClient
@@ -404,6 +404,31 @@ class TestChatEndpoint:
 
         assert any(e["type"] == "error" for e in events)
         assert events[-1]["type"] == "done"
+
+    async def test_should_reject_thread_id_from_other_user(
+        self, client: httpx.AsyncClient
+    ) -> None:
+        self._override_agent(
+            FakeAgent(
+                [
+                    (
+                        AIMessageChunk(content="Hi"),
+                        {"langgraph_node": "agent"},
+                    )
+                ]
+            )
+        )
+        response = await client.post(
+            "/api/chat",
+            json={
+                "message": "Hello",
+                "thread_id": "user-other:session-stolen",
+            },
+        )
+        events = _parse_sse_events(response.text)
+        # Should ignore the foreign thread_id and generate a new one
+        assert events[-1]["thread_id"].startswith("user-dev-user:session-")
+        assert events[-1]["thread_id"] != "user-other:session-stolen"
 
     async def test_should_reject_extra_fields(self, client: httpx.AsyncClient) -> None:
         response = await client.post(
