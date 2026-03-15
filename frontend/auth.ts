@@ -34,6 +34,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         params: {
           access_type: "offline",
           prompt: "consent",
+          // Enables scope merging for incremental consent (issue #11)
           include_granted_scopes: "true",
           scope: "openid email profile",
         },
@@ -64,7 +65,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         return token;
       }
 
-      // Token expired: refresh via Google's token endpoint
+      // Token expired: refresh via Google's token endpoint.
+      // Concurrent expired-token requests each refresh independently — Google tolerates this.
       return refreshAccessToken(token);
     },
     session({ session, token }) {
@@ -80,6 +82,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return session;
     },
     authorized({ auth: session }) {
+      if (session?.error === "RefreshTokenError") return false;
       return !!session?.user;
     },
   },

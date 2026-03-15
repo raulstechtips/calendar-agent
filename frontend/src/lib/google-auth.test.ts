@@ -103,6 +103,16 @@ describe("refreshAccessToken", () => {
     expect(result.refreshToken).toBe("test-refresh-token");
   });
 
+  it("should return error when refreshToken is undefined", async () => {
+    const mockFetch = mockFetchSuccess({ error: "invalid_grant" }, 400);
+    vi.stubGlobal("fetch", mockFetch);
+
+    const tokenWithoutRefresh: JWT = { ...baseToken, refreshToken: undefined };
+    const result = await refreshAccessToken(tokenWithoutRefresh);
+
+    expect(result.error).toBe("RefreshTokenError");
+  });
+
   it("should send correct parameters to Google token endpoint", async () => {
     const mockFetch = mockFetchSuccess({
       access_token: "new-access-token",
