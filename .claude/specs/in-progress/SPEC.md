@@ -105,7 +105,10 @@ Dependencies managed in `pyproject.toml` + `uv.lock` (committed to git). No requ
 ### Identity & Secrets Strategy
 - **No API keys in any environment.** Local dev uses `az login` via `DefaultAzureCredential`. Production uses User Assigned Managed Identity.
 - **Key Vault** stores app secrets (Fernet key, Google OAuth credentials, Auth.js secret, canary token, Redis password). Container Apps reference KV secrets via `key_vault_secret_id` in secret blocks — secrets are injected as environment variables at container startup.
-- **User Assigned Identity** (not System Assigned) is created in the Key Vault Terraform module and attached to Container Apps. This avoids a chicken-and-egg deployment race: the identity must have KV access before the Container App is created, since Azure validates KV secret references at deployment time.
+- **Two User Assigned Identities** (not System Assigned) for least-privilege separation:
+  - **Shared identity** (`id-calendaragent-dev-eus`) — created in Key Vault module (#64). Granted `Key Vault Secrets User` on Key Vault and `AcrPull` on ACR. Attached to **both** Container Apps. Both apps need KV secrets and image pull access.
+  - **Backend identity** (`id-backend-calendaragent-dev-eus`) — created in AI services module (#48). Granted `Cognitive Services OpenAI User` on OpenAI, `Search Index Data Contributor` on AI Search, `Cognitive Services User` on Content Safety. Attached to **backend Container App only**. The frontend has no reason to access AI services directly.
+- User Assigned (not System Assigned) avoids a chicken-and-egg deployment race: the identity must have KV access before the Container App is created, since Azure validates KV secret references at deployment time.
 
 ---
 
@@ -660,5 +663,5 @@ Decisions are appended here as they're made. Old decisions are kept but marked s
 | 2026-03-15 | Lazy cleanup for MVP, TTL job deferred to Phase 2 | Per-user data volume is ~MB scale; premature cleanup adds complexity without meaningful cost savings |
 | 2026-03-15 | Managed Identity + `DefaultAzureCredential` for all Azure services — no API keys | Eliminates secret rotation burden, uses `az login` in dev and User Assigned Identity in prod; same code path in both environments |
 | 2026-03-15 | Key Vault (RBAC mode) for app secrets | Fernet key, Google OAuth, Auth.js secret, canary token, Redis password stored in KV; Container Apps inject as env vars via `key_vault_secret_id` — code never touches KV SDK |
-| 2026-03-15 | User Assigned Identity over System Assigned | System Assigned creates chicken-and-egg: identity doesn't exist until Container App is created, but KV access is validated at deployment time; User Assigned is created first and granted access before Container App references it |
+| 2026-03-15 | Two User Assigned Identities for least-privilege | Shared identity (KV + ACR) on both apps; backend-only identity (AI services) on backend only. Prevents frontend from accessing OpenAI/Search/Safety. User Assigned (not System Assigned) avoids chicken-and-egg deployment race |
 | 2026-03-15 | Redis password+TLS via Key Vault; Entra ID auth deferred to Phase 2 | Entra ID for Redis requires custom `CredentialProvider` with token refresh every ~45min; password via KV is simpler and secure enough for MVP |
