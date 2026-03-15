@@ -42,8 +42,8 @@ export async function apiClient(
   return fetch(`${getApiBaseUrl()}${path}`, {
     ...rest,
     headers: {
-      Authorization: `Bearer ${session.idToken}`,
       ...(customHeaders as Record<string, string>),
+      Authorization: `Bearer ${session.idToken}`,
     },
   });
 }
