@@ -478,9 +478,10 @@ GOOGLE_CLIENT_SECRET=
 **Worktree B (Backend):**
 - **#10** Encrypted token storage (needs #12, #14)
 - **#13** User endpoints (needs #12)
+- **#59** Backend Google OAuth token verification (needs #9, #13) — zero-trust auth
 
 **Worktree C (Agent):**
-- **#17** Calendar tool integration (needs #16, #10 — blocked until #10 merges)
+- **#17** Calendar tool integration (needs #16, #10, #59 — blocked until #59 merges)
 - **#18** Prompt injection defense (needs #16)
 
 **Infra (parallel, no code deps):**
@@ -506,7 +507,7 @@ GOOGLE_CLIENT_SECRET=
 - **#49** Terraform module: Azure Cache for Redis
 
 ### Phase 4: Polish + Deploy (Day 2, Hours 5-8)
-- **#15** Background ingestion pipeline (needs #14, #10, #20, #21)
+- **#15** Background ingestion pipeline (needs #14, #10, #20, #21, #59)
 - **#26** Dockerfiles (needs working frontend + backend)
 - **#50** Terraform module: Container Apps (needs #47, #26 — only module needing Docker images)
 - **#51** Dev environment root module wiring (needs #48, #49, #50)
@@ -570,3 +571,4 @@ Decisions are appended here as they're made. Old decisions are kept but marked s
 | 2026-03-14 | Calendar only for MVP, no Gmail tools | Reduces scope; Gmail tools add Restricted scope complications |
 | 2026-03-14 | uv for Python package management | 10-100x faster than pip; pyproject.toml + uv.lock replaces requirements.txt |
 | 2026-03-14 | pnpm for frontend package management | 3-5x faster than npm; disk-efficient; community standard for Next.js |
+| 2026-03-14 | Backend independently verifies Google ID tokens (zero-trust) | Header-trust model is a structural auth bypass; backend must verify against same Google OAuth app as frontend (#59) |
