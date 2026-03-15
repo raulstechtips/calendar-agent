@@ -1,15 +1,24 @@
 """Tests for user endpoints and get_current_user auth dependency."""
 
 from collections.abc import AsyncGenerator
+from typing import Any
+from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
 from fastapi import HTTPException
+from google.auth.exceptions import GoogleAuthError, TransportError
 from httpx import ASGITransport
 
 from app.auth.dependencies import get_current_user
 from app.main import app
 from app.users.schemas import UserResponse
+from tests.conftest import (
+    TEST_USER_EMAIL,
+    TEST_USER_ID,
+    TEST_USER_NAME,
+    TEST_USER_PICTURE,
+)
 
 
 @pytest.fixture
@@ -21,117 +30,242 @@ async def client() -> AsyncGenerator[httpx.AsyncClient, None]:
 
 
 class TestGetCurrentUser:
-    async def test_should_return_user_from_valid_headers(self) -> None:
-        user = await get_current_user(
-            x_user_id="google-123",
-            x_user_email="alice@example.com",
-            x_user_name="Alice Smith",
+    """Unit tests for get_current_user dependency (token verification)."""
+
+    @pytest.fixture(autouse=True)
+    def _mock_google_client_id(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            "app.auth.dependencies.settings.google_client_id",
+            "test-google-client-id",
         )
-        assert user.id == "google-123"
-        assert user.email == "alice@example.com"
-        assert user.name == "Alice Smith"
-        assert user.picture is None
+
+    async def test_should_return_user_from_valid_google_id_token(
+        self,
+        google_claims: dict[str, Any],
+    ) -> None:
+        mock_creds = AsyncMock()
+        mock_creds.credentials = "valid-id-token"
+
+        with patch(
+            "app.auth.dependencies.verify_oauth2_token",
+            return_value=google_claims,
+        ):
+            user = await get_current_user(credentials=mock_creds)
+
+        assert user.id == TEST_USER_ID
+        assert user.email == TEST_USER_EMAIL
+        assert user.name == TEST_USER_NAME
+        assert user.picture == TEST_USER_PICTURE
         assert user.granted_scopes == []
 
-    async def test_should_use_email_as_name_when_name_missing(self) -> None:
-        user = await get_current_user(
-            x_user_id="google-123",
-            x_user_email="alice@example.com",
-            x_user_name="",
-        )
-        assert user.name == "alice@example.com"
+    async def test_should_use_email_as_name_when_name_claim_missing(
+        self,
+        google_claims: dict[str, Any],
+    ) -> None:
+        claims_without_name = {k: v for k, v in google_claims.items() if k != "name"}
+        mock_creds = AsyncMock()
+        mock_creds.credentials = "valid-id-token"
 
-    async def test_should_strip_header_values(self) -> None:
-        user = await get_current_user(
-            x_user_id="  google-123  ",
-            x_user_email="  alice@example.com  ",
-            x_user_name="  Alice  ",
-        )
-        assert user.id == "google-123"
-        assert user.email == "alice@example.com"
-        assert user.name == "Alice"
+        with patch(
+            "app.auth.dependencies.verify_oauth2_token",
+            return_value=claims_without_name,
+        ):
+            user = await get_current_user(credentials=mock_creds)
 
-    async def test_should_reject_empty_user_id(self) -> None:
+        assert user.name == TEST_USER_EMAIL
+
+    async def test_should_handle_missing_picture_claim(
+        self,
+        google_claims: dict[str, Any],
+    ) -> None:
+        claims_without_picture = {
+            k: v for k, v in google_claims.items() if k != "picture"
+        }
+        mock_creds = AsyncMock()
+        mock_creds.credentials = "valid-id-token"
+
+        with patch(
+            "app.auth.dependencies.verify_oauth2_token",
+            return_value=claims_without_picture,
+        ):
+            user = await get_current_user(credentials=mock_creds)
+
+        assert user.picture is None
+
+    async def test_should_reject_missing_authorization_header(self) -> None:
         with pytest.raises(HTTPException) as exc_info:
-            await get_current_user(
-                x_user_id="   ",
-                x_user_email="alice@example.com",
-                x_user_name="Alice",
-            )
+            await get_current_user(credentials=None)
+        assert exc_info.value.status_code == 401
+        assert "authorization" in exc_info.value.detail.lower()
+
+    async def test_should_reject_invalid_token(self) -> None:
+        mock_creds = AsyncMock()
+        mock_creds.credentials = "invalid-token"
+
+        with (
+            patch(
+                "app.auth.dependencies.verify_oauth2_token",
+                side_effect=ValueError("Token is not valid"),
+            ),
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            await get_current_user(credentials=mock_creds)
+
         assert exc_info.value.status_code == 401
 
-    async def test_should_reject_empty_email(self) -> None:
-        with pytest.raises(HTTPException) as exc_info:
-            await get_current_user(
-                x_user_id="google-123",
-                x_user_email="   ",
-                x_user_name="Alice",
-            )
+    async def test_should_reject_expired_token(self) -> None:
+        mock_creds = AsyncMock()
+        mock_creds.credentials = "expired-token"
+
+        with (
+            patch(
+                "app.auth.dependencies.verify_oauth2_token",
+                side_effect=ValueError("Token expired"),
+            ),
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            await get_current_user(credentials=mock_creds)
+
+        assert exc_info.value.status_code == 401
+
+    async def test_should_reject_wrong_issuer(self) -> None:
+        mock_creds = AsyncMock()
+        mock_creds.credentials = "wrong-issuer-token"
+
+        with (
+            patch(
+                "app.auth.dependencies.verify_oauth2_token",
+                side_effect=GoogleAuthError("Wrong issuer"),  # type: ignore[no-untyped-call]
+            ),
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            await get_current_user(credentials=mock_creds)
+
+        assert exc_info.value.status_code == 401
+
+    async def test_should_pass_google_client_id_as_audience(
+        self,
+        google_claims: dict[str, Any],
+    ) -> None:
+        mock_creds = AsyncMock()
+        mock_creds.credentials = "valid-id-token"
+
+        with (
+            patch(
+                "app.auth.dependencies.verify_oauth2_token",
+                return_value=google_claims,
+            ) as mock_verify,
+            patch(
+                "app.auth.dependencies.settings",
+            ) as mock_settings,
+        ):
+            mock_settings.google_client_id = "my-real-client-id"
+            await get_current_user(credentials=mock_creds)
+
+        mock_verify.assert_called_once()
+        _, kwargs = mock_verify.call_args
+        assert kwargs["audience"] == "my-real-client-id"
+
+    async def test_should_return_500_when_google_client_id_not_configured(
+        self,
+    ) -> None:
+        mock_creds = AsyncMock()
+        mock_creds.credentials = "valid-id-token"
+
+        with (
+            patch("app.auth.dependencies.settings") as mock_settings,
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            mock_settings.google_client_id = ""
+            await get_current_user(credentials=mock_creds)
+
+        assert exc_info.value.status_code == 500
+
+    async def test_should_return_502_on_transport_error(self) -> None:
+        mock_creds = AsyncMock()
+        mock_creds.credentials = "valid-id-token"
+
+        with (
+            patch(
+                "app.auth.dependencies.verify_oauth2_token",
+                side_effect=TransportError("Could not fetch certificates"),  # type: ignore[no-untyped-call]
+            ),
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            await get_current_user(credentials=mock_creds)
+
+        assert exc_info.value.status_code == 502
+
+    async def test_should_return_401_for_missing_required_claims(self) -> None:
+        mock_creds = AsyncMock()
+        mock_creds.credentials = "valid-id-token"
+        claims_missing_sub = {"email": "test@example.com", "iss": "accounts.google.com"}
+
+        with (
+            patch(
+                "app.auth.dependencies.verify_oauth2_token",
+                return_value=claims_missing_sub,
+            ),
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            await get_current_user(credentials=mock_creds)
+
         assert exc_info.value.status_code == 401
 
 
 class TestGetMeEndpoint:
-    async def test_should_return_user_profile(self, client: httpx.AsyncClient) -> None:
-        response = await client.get(
-            "/api/users/me",
-            headers={
-                "X-User-Id": "google-123",
-                "X-User-Email": "alice@example.com",
-                "X-User-Name": "Alice Smith",
-            },
+    """Integration tests for GET /api/users/me."""
+
+    @pytest.fixture(autouse=True)
+    def _mock_google_client_id(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            "app.auth.dependencies.settings.google_client_id",
+            "test-google-client-id",
         )
+
+    async def test_should_return_user_profile_with_valid_token(
+        self,
+        client: httpx.AsyncClient,
+        google_claims: dict[str, Any],
+        auth_headers: dict[str, str],
+    ) -> None:
+        with patch(
+            "app.auth.dependencies.verify_oauth2_token",
+            return_value=google_claims,
+        ):
+            response = await client.get("/api/users/me", headers=auth_headers)
+
         assert response.status_code == 200
         data = response.json()
-        assert data["id"] == "google-123"
-        assert data["email"] == "alice@example.com"
-        assert data["name"] == "Alice Smith"
-        assert data["picture"] is None
+        assert data["id"] == TEST_USER_ID
+        assert data["email"] == TEST_USER_EMAIL
+        assert data["name"] == TEST_USER_NAME
+        assert data["picture"] == TEST_USER_PICTURE
         assert data["granted_scopes"] == []
 
-    async def test_should_return_422_without_user_id_header(
-        self, client: httpx.AsyncClient
+    async def test_should_return_401_without_authorization_header(
+        self,
+        client: httpx.AsyncClient,
     ) -> None:
-        response = await client.get(
-            "/api/users/me",
-            headers={"X-User-Email": "alice@example.com"},
-        )
-        assert response.status_code == 422
-
-    async def test_should_return_422_without_email_header(
-        self, client: httpx.AsyncClient
-    ) -> None:
-        response = await client.get(
-            "/api/users/me",
-            headers={"X-User-Id": "google-123"},
-        )
-        assert response.status_code == 422
-
-    async def test_should_return_401_with_whitespace_only_user_id(
-        self, client: httpx.AsyncClient
-    ) -> None:
-        response = await client.get(
-            "/api/users/me",
-            headers={
-                "X-User-Id": "   ",
-                "X-User-Email": "alice@example.com",
-            },
-        )
+        response = await client.get("/api/users/me")
         assert response.status_code == 401
 
-    async def test_should_return_401_with_whitespace_only_email(
-        self, client: httpx.AsyncClient
+    async def test_should_return_401_with_invalid_token(
+        self,
+        client: httpx.AsyncClient,
+        auth_headers: dict[str, str],
     ) -> None:
-        response = await client.get(
-            "/api/users/me",
-            headers={
-                "X-User-Id": "google-123",
-                "X-User-Email": "   ",
-            },
-        )
+        with patch(
+            "app.auth.dependencies.verify_oauth2_token",
+            side_effect=ValueError("Invalid token"),
+        ):
+            response = await client.get("/api/users/me", headers=auth_headers)
+
         assert response.status_code == 401
 
     async def test_should_work_with_dependency_override(
-        self, client: httpx.AsyncClient
+        self,
+        client: httpx.AsyncClient,
     ) -> None:
         mock_user = UserResponse(
             id="override-user",
