@@ -41,9 +41,15 @@ class ConfirmResponse(BaseModel):
     status: str
 
 
+def _is_valid_thread_id(thread_id: str, user_id: str) -> bool:
+    """Check that thread_id belongs to user and has a non-empty session suffix."""
+    prefix = f"user-{user_id}:session-"
+    return thread_id.startswith(prefix) and len(thread_id) > len(prefix)
+
+
 def _resolve_thread_id(user_id: str, provided: str | None) -> str:
     """Resolve or generate a thread ID, enforcing ownership."""
-    if provided and provided.startswith(f"user-{user_id}:session-"):
+    if provided and _is_valid_thread_id(provided, user_id):
         return provided
     session_id = uuid.uuid4().hex[:12]
     return build_thread_id(user_id, session_id)
@@ -108,8 +114,7 @@ async def chat(
     agent: CompiledStateGraph = Depends(get_agent),  # type: ignore[type-arg]  # noqa: B008
 ) -> StreamingResponse:
     """Send a message to the agent and receive an SSE stream response."""
-    # TODO: Replace with real auth from #9/#10/#11
-    user_id = "dev-user"
+    user_id = "dev-user"  # stub until auth wired in #9/#10/#11
     thread_id = _resolve_thread_id(user_id, request.thread_id)
 
     guard_result = check_input(request.message)
@@ -134,10 +139,9 @@ async def confirm(
     agent: CompiledStateGraph = Depends(get_agent),  # type: ignore[type-arg]  # noqa: B008
 ) -> ConfirmResponse:
     """Confirm or reject a pending write operation."""
-    # TODO: Replace with real auth from #9/#10/#11
-    user_id = "dev-user"
+    user_id = "dev-user"  # stub until auth wired in #9/#10/#11
 
-    if not request.thread_id.startswith(f"user-{user_id}:session-"):
+    if not _is_valid_thread_id(request.thread_id, user_id):
         raise HTTPException(status_code=403, detail="Thread ID ownership mismatch")
 
     if not request.approved:

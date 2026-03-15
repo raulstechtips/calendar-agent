@@ -54,11 +54,11 @@ _INJECTION_PATTERNS: list[tuple[re.Pattern[str], str]] = [
         "jailbreak",
     ),
     (
-        re.compile(r"\bDAN\b"),
+        re.compile(r"\bDAN\b", re.IGNORECASE),
         "dan_mode",
     ),
     (
-        re.compile(r"\[INST\]|\[system\]|<\|im_start\|>"),
+        re.compile(r"\[INST\]|\[system\]|<\|im_start\|>", re.IGNORECASE),
         "format_injection",
     ),
 ]
@@ -71,10 +71,16 @@ class GuardResult(NamedTuple):
     pattern: str | None
 
 
+def _normalize(text: str) -> str:
+    """Collapse all whitespace (including newlines) into single spaces."""
+    return re.sub(r"\s+", " ", text)
+
+
 def check_input(text: str) -> GuardResult:
     """Check user input for known prompt injection patterns."""
+    normalized = _normalize(text)
     for compiled, name in _INJECTION_PATTERNS:
-        if compiled.search(text):
+        if compiled.search(normalized):
             return GuardResult(blocked=True, pattern=name)
     return GuardResult(blocked=False, pattern=None)
 
