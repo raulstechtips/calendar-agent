@@ -41,6 +41,19 @@ resource "azurerm_resource_group" "this" {
   tags = local.common_tags
 }
 
+# -----------------------------------------------------------------------------
+# AI Services — OpenAI, AI Search, Content Safety + backend identity
+# -----------------------------------------------------------------------------
+
+module "ai_services" {
+  source = "../../modules/ai-services"
+
+  resource_group_name = azurerm_resource_group.this.name
+  location            = azurerm_resource_group.this.location
+  name_suffix         = local.name_suffix
+  common_tags         = local.common_tags
+}
+
 # --- Data Sources ---
 
 data "azurerm_client_config" "current" {}
