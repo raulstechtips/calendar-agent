@@ -227,17 +227,28 @@ class AgentState(TypedDict):
     pending_confirmation: dict | None  # For human-in-the-loop gates
 ```
 
+### Sync Metadata (Redis Hash at `sync_metadata:{user_id}:calendar`)
+
+```python
+class SyncMetadata(BaseModel):
+    sync_token: str | None    # Google Calendar incremental sync token
+    last_ingested_at: int     # Unix timestamp of last successful sync
+    window_start: str         # ISO date — oldest event ingested
+    window_end: str           # ISO date — furthest future event ingested
+```
+
 ### Search Document (Azure AI Search index: `calendar-context`)
 
 | Field | Type | Attributes |
 |-------|------|------------|
-| `id` | `Edm.String` | key |
+| `id` | `Edm.String` | key (set to `source_id` for upsert deduplication) |
 | `user_id` | `Edm.String` | filterable, not searchable |
 | `content` | `Edm.String` | searchable |
 | `embedding` | `Collection(Edm.Single)` | 1536 dimensions, HNSW |
 | `source_type` | `Edm.String` | filterable (event, email, contact) |
 | `source_id` | `Edm.String` | filterable |
 | `timestamp` | `Edm.DateTimeOffset` | filterable, sortable |
+| `last_modified` | `Edm.DateTimeOffset` | filterable — for freshness scoring and future cleanup |
 
 ---
 
@@ -387,6 +398,57 @@ Key rules in system prompt:
 3. Store new access_token in Redis with updated TTL (expires_in - 300s)
 4. If refresh fails (revoked), redirect user to re-consent
 ```
+
+---
+
+## Ingestion Strategy
+
+### Overview
+
+The RAG pipeline ingests calendar events into Azure AI Search so the agent can answer historical and semantic queries (e.g., "when did I last see Dr. Smith?", "when is my next dentist appointment?"). For real-time queries ("what's on my schedule tomorrow?"), the agent uses the `list_events` tool to call the Google Calendar API directly.
+
+### Sync Triggers
+
+```
+First login (no sync_token in Redis):
+  → Full ingest: fetch all events from (now - 6 months) to (now + 3 months)
+  → Chunk each event into embeddable text
+  → Embed via text-embedding-3-small, upsert to Azure AI Search
+  → Store syncToken and last_ingested_at in Redis
+
+Subsequent logins (sync_token exists):
+  → Check last_ingested_at
+  → If < 1 hour ago: skip (cooldown — data is fresh enough)
+  → If ≥ 1 hour ago: delta sync using Google Calendar syncToken
+    → Google returns only created, updated, and deleted events since last sync
+    → Creates: embed + upsert (source_id as document key)
+    → Updates: re-embed + upsert (overwrites existing document)
+    → Deletes: remove document from index by source_id
+  → Store new syncToken and update last_ingested_at
+```
+
+### Ingestion Window
+
+| Direction | Window | Reasoning |
+|-----------|--------|-----------|
+| Past | 6 months | Supports historical queries and pattern analysis across meetings, appointments |
+| Future | 3 months | Enables semantic search over upcoming events; supplements `list_events` tool |
+
+### Delta Sync via Google Calendar syncToken
+
+The Google Calendar Events API supports incremental sync. On the initial `events.list()` call, the response includes a `nextSyncToken`. Passing this token on subsequent calls returns only events that changed (created, updated, deleted) since the token was issued. This avoids re-fetching and re-embedding the full event history on every login.
+
+If the `syncToken` is invalidated by Google (e.g., too old), fall back to a full re-ingest.
+
+### Execution Model (MVP)
+
+Ingestion runs as a **FastAPI BackgroundTask** triggered from the auth callback. This keeps the implementation simple (no additional infrastructure) and the failure mode benign — if ingestion fails, the user retries on next login. The ingestion service is designed with a clean interface (`IngestService.full_ingest()`, `IngestService.delta_sync()`) so the execution backend can be swapped to a durable orchestrator (e.g., Azure Durable Functions) in a future phase without changing business logic.
+
+### Cleanup Strategy
+
+**MVP:** Lazy — no automatic cleanup. Data volume per user is small (a few MB for 9 months of events). The `last_modified` field on search documents enables future cleanup queries.
+
+**Phase 2:** Scheduled TTL job deletes documents where `timestamp < (now - 7 months)`. The 7-month threshold (vs. 6-month ingest window) provides a 1-month buffer to avoid race conditions at the window edge.
 
 ---
 
@@ -572,3 +634,8 @@ Decisions are appended here as they're made. Old decisions are kept but marked s
 | 2026-03-14 | uv for Python package management | 10-100x faster than pip; pyproject.toml + uv.lock replaces requirements.txt |
 | 2026-03-14 | pnpm for frontend package management | 3-5x faster than npm; disk-efficient; community standard for Next.js |
 | 2026-03-14 | Backend independently verifies Google ID tokens (zero-trust) | Header-trust model is a structural auth bypass; backend must verify against same Google OAuth app as frontend (#59) |
+| 2026-03-15 | 6-month back + 3-month forward ingestion window | Balances historical query support with embedding cost; future window enables semantic search over upcoming events |
+| 2026-03-15 | Google Calendar syncToken for delta sync | Avoids re-fetching all events on every login; Google-native incremental sync with create/update/delete signals |
+| 2026-03-15 | 1-hour cooldown between ingestion syncs | Prevents redundant work for frequent logins; delta sync is cheap but not free (API calls + conditional re-embedding) |
+| 2026-03-15 | FastAPI BackgroundTasks for MVP ingestion | Benign failure mode (retry on next login); avoids adding a third deployment unit; clean interface enables future migration to Durable Functions |
+| 2026-03-15 | Lazy cleanup for MVP, TTL job deferred to Phase 2 | Per-user data volume is ~MB scale; premature cleanup adds complexity without meaningful cost savings |
