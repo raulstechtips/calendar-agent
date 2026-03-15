@@ -6,6 +6,7 @@ const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 
 const baseToken: JWT = {
   accessToken: "old-access-token",
+  idToken: "old-id-token",
   refreshToken: "test-refresh-token",
   expiresAt: 1000,
   scope: "openid email profile",
@@ -119,6 +120,33 @@ describe("refreshAccessToken", () => {
     const result = await refreshAccessToken(baseToken);
 
     expect(result.error).toBe("RefreshTokenError");
+  });
+
+  it("should capture id_token from refresh response", async () => {
+    const mockFetch = mockFetchSuccess({
+      access_token: "new-access-token",
+      expires_in: 3600,
+      id_token: "new-id-token",
+      token_type: "Bearer",
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    const result = await refreshAccessToken(baseToken);
+
+    expect(result.idToken).toBe("new-id-token");
+  });
+
+  it("should preserve existing idToken when refresh omits id_token", async () => {
+    const mockFetch = mockFetchSuccess({
+      access_token: "new-access-token",
+      expires_in: 3600,
+      token_type: "Bearer",
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    const result = await refreshAccessToken(baseToken);
+
+    expect(result.idToken).toBe("old-id-token");
   });
 
   it("should send correct parameters to Google token endpoint", async () => {
