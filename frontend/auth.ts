@@ -10,6 +10,7 @@ import { refreshAccessToken } from "./src/lib/google-auth";
 declare module "next-auth" {
   interface Session {
     accessToken?: string;
+    idToken?: string;
     error?: "RefreshTokenError";
     user: {
       id: string;
@@ -20,6 +21,7 @@ declare module "next-auth" {
 declare module "next-auth/jwt" {
   interface JWT {
     accessToken?: string;
+    idToken?: string;
     refreshToken?: string;
     expiresAt?: number;
     scope?: string;
@@ -51,6 +53,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         return {
           ...token,
           accessToken: account.access_token,
+          idToken: account.id_token,
           refreshToken: account.refresh_token,
           expiresAt: account.expires_at,
           scope: account.scope,
@@ -76,6 +79,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
       if (typeof token.accessToken === "string") {
         session.accessToken = token.accessToken;
+      }
+      if (typeof token.idToken === "string") {
+        session.idToken = token.idToken;
       }
       if (token.error) {
         session.error = token.error;
