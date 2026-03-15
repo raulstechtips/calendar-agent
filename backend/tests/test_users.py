@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 from fastapi import HTTPException
-from google.auth.exceptions import GoogleAuthError
+from google.auth.exceptions import GoogleAuthError, TransportError
 from httpx import ASGITransport
 
 from app.auth.dependencies import get_current_user
@@ -180,6 +180,37 @@ class TestGetCurrentUser:
             await get_current_user(credentials=mock_creds)
 
         assert exc_info.value.status_code == 500
+
+    async def test_should_return_502_on_transport_error(self) -> None:
+        mock_creds = AsyncMock()
+        mock_creds.credentials = "valid-id-token"
+
+        with (
+            patch(
+                "app.auth.dependencies.verify_oauth2_token",
+                side_effect=TransportError("Could not fetch certificates"),  # type: ignore[no-untyped-call]
+            ),
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            await get_current_user(credentials=mock_creds)
+
+        assert exc_info.value.status_code == 502
+
+    async def test_should_return_401_for_missing_required_claims(self) -> None:
+        mock_creds = AsyncMock()
+        mock_creds.credentials = "valid-id-token"
+        claims_missing_sub = {"email": "test@example.com", "iss": "accounts.google.com"}
+
+        with (
+            patch(
+                "app.auth.dependencies.verify_oauth2_token",
+                return_value=claims_missing_sub,
+            ),
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            await get_current_user(credentials=mock_creds)
+
+        assert exc_info.value.status_code == 401
 
 
 class TestGetMeEndpoint:

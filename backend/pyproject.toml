@@ -17,6 +17,7 @@ dependencies = [
     "asgi-correlation-id>=4.3.0",
     "cryptography",
     "google-auth>=2.49.1",
+    "cachecontrol>=0.14.4",
 ]
 
 [dependency-groups]
@@ -27,6 +28,7 @@ dev = [
     "httpx",
     "mypy>=1.19.1",
     "pyright>=1.1.408",
+    "types-requests>=2.32.4.20260107",
 ]
 
 [tool.hatch.build.targets.wheel]
