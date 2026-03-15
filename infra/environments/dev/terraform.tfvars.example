@@ -1,0 +1,8 @@
+# Dev environment variables
+# Copy this file to terraform.tfvars and fill in values:
+#   cp terraform.tfvars.example terraform.tfvars
+
+project_name    = "calendaragent"
+environment     = "dev"
+location        = "eastus"
+subscription_id = "00000000-0000-0000-0000-000000000000" # Your Azure subscription ID
