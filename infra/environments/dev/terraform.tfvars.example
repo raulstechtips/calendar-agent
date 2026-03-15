@@ -6,3 +6,14 @@ project_name    = "calendaragent"
 environment     = "dev"
 location        = "eastus"
 subscription_id = "00000000-0000-0000-0000-000000000000" # Your Azure subscription ID
+
+# App secrets (set via TF_VAR_ env vars or terraform.tfvars — NEVER commit real values)
+# Generate: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+fernet_key = "CHANGE_ME"
+# From Google Cloud Console → APIs & Services → Credentials
+google_client_id     = "CHANGE_ME"
+google_client_secret = "CHANGE_ME"
+# Generate: openssl rand -base64 32
+auth_secret = "CHANGE_ME"
+# Generate: openssl rand -hex 16
+canary_token = "CHANGE_ME"
