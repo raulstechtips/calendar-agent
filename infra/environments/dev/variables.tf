@@ -41,3 +41,60 @@ variable "subscription_id" {
     error_message = "Subscription ID must be a valid GUID format (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)."
   }
 }
+
+# --- App secrets (stored in Key Vault) ---
+
+variable "fernet_key" {
+  description = "Fernet encryption key for token storage"
+  type        = string
+  sensitive   = true
+
+  validation {
+    condition     = length(trimspace(var.fernet_key)) > 0 && var.fernet_key != "CHANGE_ME"
+    error_message = "fernet_key must be set to a real secret value, not a placeholder."
+  }
+}
+
+variable "google_client_id" {
+  description = "Google OAuth client ID"
+  type        = string
+  sensitive   = true
+
+  validation {
+    condition     = length(trimspace(var.google_client_id)) > 0 && var.google_client_id != "CHANGE_ME"
+    error_message = "google_client_id must be set to a real secret value, not a placeholder."
+  }
+}
+
+variable "google_client_secret" {
+  description = "Google OAuth client secret"
+  type        = string
+  sensitive   = true
+
+  validation {
+    condition     = length(trimspace(var.google_client_secret)) > 0 && var.google_client_secret != "CHANGE_ME"
+    error_message = "google_client_secret must be set to a real secret value, not a placeholder."
+  }
+}
+
+variable "auth_secret" {
+  description = "Auth.js session secret"
+  type        = string
+  sensitive   = true
+
+  validation {
+    condition     = length(trimspace(var.auth_secret)) > 0 && var.auth_secret != "CHANGE_ME"
+    error_message = "auth_secret must be set to a real secret value, not a placeholder."
+  }
+}
+
+variable "canary_token" {
+  description = "Canary token for prompt injection detection"
+  type        = string
+  sensitive   = true
+
+  validation {
+    condition     = length(trimspace(var.canary_token)) > 0 && var.canary_token != "CHANGE_ME"
+    error_message = "canary_token must be set to a real secret value, not a placeholder."
+  }
+}
