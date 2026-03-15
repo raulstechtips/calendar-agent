@@ -16,6 +16,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.agents.calendar_agent import build_thread_id, get_agent
 from app.agents.guardrails import check_canary_leak, check_input
 from app.core.config import settings
+from app.auth.dependencies import get_current_user
+from app.users.schemas import UserResponse
 
 logger = logging.getLogger(__name__)
 
@@ -143,10 +145,11 @@ _SSE_HEADERS = {"Cache-Control": "no-cache", "Connection": "keep-alive"}
 @router.post("/api/chat")
 async def chat(
     request: ChatRequest,
+    user: UserResponse = Depends(get_current_user),  # noqa: B008
     agent: CompiledStateGraph = Depends(get_agent),  # type: ignore[type-arg]  # noqa: B008
 ) -> StreamingResponse:
     """Send a message to the agent and receive an SSE stream response."""
-    user_id = "dev-user"  # stub until auth wired in #9/#10/#11
+    user_id = user.id
     thread_id = _resolve_thread_id(user_id, request.thread_id)
 
     guard_result = check_input(request.message)

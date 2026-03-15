@@ -26,7 +26,10 @@ from app.agents.prompts import (
     get_system_instructions,
 )
 from app.agents.state import AgentState
+from app.auth.dependencies import get_current_user
 from app.main import app
+from app.users.schemas import UserResponse
+from tests.conftest import TEST_USER_ID
 
 
 class FakeAgent:
@@ -219,6 +222,26 @@ class TestAgentCreation:
 
 class TestChatEndpoint:
     @pytest.fixture(autouse=True)
+    def _default_auth_override(
+        self,
+    ) -> Generator[None, None, None]:
+        """Override get_current_user so chat endpoint doesn't need real tokens."""
+        mock_user = UserResponse(
+            id=TEST_USER_ID,
+            email="testuser@example.com",
+            name="Test User",
+            picture=None,
+            granted_scopes=[],
+        )
+
+        async def _override() -> UserResponse:
+            return mock_user
+
+        app.dependency_overrides[get_current_user] = _override
+        yield
+        app.dependency_overrides.pop(get_current_user, None)
+
+    @pytest.fixture(autouse=True)
     def _default_agent_override(
         self,
     ) -> Generator[None, None, None]:
@@ -358,16 +381,17 @@ class TestChatEndpoint:
                 ]
             )
         )
+        own_thread = f"user-{TEST_USER_ID}:session-existing"
         response = await client.post(
             "/api/chat",
             json={
                 "message": "Hello",
-                "thread_id": "user-dev-user:session-existing",
+                "thread_id": own_thread,
             },
         )
         events = _parse_sse_events(response.text)
 
-        assert events[-1]["thread_id"] == "user-dev-user:session-existing"
+        assert events[-1]["thread_id"] == own_thread
 
     async def test_should_skip_empty_content_chunks(
         self, client: httpx.AsyncClient
@@ -427,8 +451,15 @@ class TestChatEndpoint:
         )
         events = _parse_sse_events(response.text)
         # Should ignore the foreign thread_id and generate a new one
-        assert events[-1]["thread_id"].startswith("user-dev-user:session-")
+        assert events[-1]["thread_id"].startswith(f"user-{TEST_USER_ID}:session-")
         assert events[-1]["thread_id"] != "user-other:session-stolen"
+
+    async def test_should_reject_unauthenticated_request(
+        self, client: httpx.AsyncClient
+    ) -> None:
+        app.dependency_overrides.pop(get_current_user, None)
+        response = await client.post("/api/chat", json={"message": "Hello"})
+        assert response.status_code == 401
 
     async def test_should_reject_extra_fields(self, client: httpx.AsyncClient) -> None:
         response = await client.post(
