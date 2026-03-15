@@ -67,13 +67,27 @@ async def _blocked_response(thread_id: str) -> AsyncGenerator[str, None]:
     yield f"data: {json.dumps(done_event)}\n\n"
 
 
+def _emit_token(content: str) -> str:
+    """Format a token SSE event."""
+    event: dict[str, Any] = {"type": "token", "content": content}
+    return f"data: {json.dumps(event)}\n\n"
+
+
 async def _stream_response(
     agent: CompiledStateGraph,  # type: ignore[type-arg]
     message: str,
     thread_id: str,
     user_id: str,
 ) -> AsyncGenerator[str, None]:
-    """Stream agent response as SSE events."""
+    """Stream agent response as SSE events.
+
+    Uses a trailing buffer to detect canary tokens split across chunks.
+    """
+    canary = settings.canary_token
+    # Hold back the last (len(canary)-1) chars so a split canary is caught
+    buf_size = max(len(canary) - 1, 0) if canary else 0
+    buf = ""
+
     try:
         async for chunk, _metadata in agent.astream(
             {
@@ -84,15 +98,33 @@ async def _stream_response(
             config={"configurable": {"thread_id": thread_id}},
             stream_mode="messages",
         ):
-            if isinstance(chunk, AIMessageChunk) and chunk.content:
-                content = str(chunk.content)
-                if settings.canary_token:
-                    content, leaked = check_canary_leak(content, settings.canary_token)
-                    if leaked:
-                        logger.warning("Canary token detected in agent output")
-                if content:
-                    event: dict[str, Any] = {"type": "token", "content": content}
-                    yield f"data: {json.dumps(event)}\n\n"
+            if not (isinstance(chunk, AIMessageChunk) and chunk.content):
+                continue
+
+            text = buf + str(chunk.content)
+            if canary:
+                text, leaked = check_canary_leak(text, canary)
+                if leaked:
+                    logger.warning("Canary token detected in agent output")
+
+            if buf_size and len(text) > buf_size:
+                emit, buf = text[:-buf_size], text[-buf_size:]
+                if emit:
+                    yield _emit_token(emit)
+            elif buf_size:
+                buf = text
+            elif text:
+                yield _emit_token(text)
+
+        # Flush remaining buffer
+        if buf:
+            if canary:
+                buf, leaked = check_canary_leak(buf, canary)
+                if leaked:
+                    logger.warning("Canary token detected in agent output")
+            if buf:
+                yield _emit_token(buf)
+
     except Exception:
         logger.exception("Agent streaming error")
         error_event: dict[str, Any] = {

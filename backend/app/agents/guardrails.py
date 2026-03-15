@@ -54,7 +54,11 @@ _INJECTION_PATTERNS: list[tuple[re.Pattern[str], str]] = [
         "jailbreak",
     ),
     (
-        re.compile(r"\bDAN\b", re.IGNORECASE),
+        re.compile(
+            r"\b(?:DAN\s+mode|do\s+anything\s+now|respond\s+as\s+DAN"
+            r"|as\s+DAN\s+from\s+now)\b",
+            re.IGNORECASE,
+        ),
         "dan_mode",
     ),
     (
