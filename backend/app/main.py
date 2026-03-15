@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from app.agents.router import router as agents_router
 from app.core.middleware import setup_middleware
 from app.core.redis import close_redis, get_redis
+from app.users.router import router as users_router
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,7 @@ setup_middleware(app)
 
 
 app.include_router(agents_router)
+app.include_router(users_router)
 
 
 @app.get("/health")
