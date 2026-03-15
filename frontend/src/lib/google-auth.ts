@@ -37,8 +37,8 @@ export async function refreshAccessToken(token: JWT): Promise<JWT> {
 
     return {
       ...token,
-      accessToken: refreshed.access_token as string,
-      expiresAt: Math.floor(Date.now() / 1000) + (refreshed.expires_in as number),
+      accessToken: refreshed.access_token,
+      expiresAt: Math.floor(Date.now() / 1000) + refreshed.expires_in,
       refreshToken: (typeof refreshed.refresh_token === "string" ? refreshed.refresh_token : token.refreshToken),
       error: undefined,
     };

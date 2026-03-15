@@ -113,6 +113,14 @@ describe("refreshAccessToken", () => {
     expect(result.error).toBe("RefreshTokenError");
   });
 
+  it("should return error when credentials are missing", async () => {
+    vi.unstubAllEnvs();
+
+    const result = await refreshAccessToken(baseToken);
+
+    expect(result.error).toBe("RefreshTokenError");
+  });
+
   it("should send correct parameters to Google token endpoint", async () => {
     const mockFetch = mockFetchSuccess({
       access_token: "new-access-token",

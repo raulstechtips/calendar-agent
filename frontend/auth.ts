@@ -54,6 +54,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           refreshToken: account.refresh_token,
           expiresAt: account.expires_at,
           scope: account.scope,
+          error: undefined,
         };
       }
 
