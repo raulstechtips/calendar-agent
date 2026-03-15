@@ -36,6 +36,7 @@ A conversational AI calendar assistant where users authenticate with Google, cha
 | `slowapi` | ≥0.1.9 | `uv add slowapi` |
 | `asgi-correlation-id` | ≥4.3.0 | `uv add asgi-correlation-id` |
 | `cryptography` | latest | `uv add cryptography` |
+| `azure-identity` | latest | `uv add azure-identity` |
 | Python | 3.12 | `python:3.12-slim` base image |
 
 Dev dependencies (in `[dependency-groups]`):
@@ -57,39 +58,54 @@ Dependencies managed in `pyproject.toml` + `uv.lock` (committed to git). No requ
 ## Architecture
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│ Azure Container Apps Environment                         │
-│                                                          │
-│  ┌─────────────────────┐    ┌──────────────────────────┐ │
-│  │ Frontend (external)  │    │ Backend (internal)        │ │
-│  │ Next.js 16           │───▶│ FastAPI                   │ │
-│  │ Port 3000            │    │ Port 8000                 │ │
-│  │                      │    │                           │ │
-│  │ - Auth.js v5         │    │ - LangGraph ReAct Agent   │ │
-│  │ - Chat UI            │    │ - Google Calendar Tools   │ │
-│  │ - Calendar View      │    │ - Content Safety Guards   │ │
-│  │ - proxy.ts auth gate │    │ - Token management        │ │
-│  └─────────────────────┘    └────────┬──────────────────┘ │
-│                                      │                    │
-│  ┌───────────────┐  ┌───────────────┐│ ┌────────────────┐ │
-│  │ Azure Cache   │  │ Azure OpenAI  ││ │ Azure AI       │ │
-│  │ for Redis     │  │ GPT-4o        ││ │ Search         │ │
-│  │ Port 6380 TLS │  │ embed-3-small ││ │ Hybrid index   │ │
-│  └───────────────┘  └───────────────┘│ └────────────────┘ │
-│                                      │                    │
-│                              ┌───────▼────────┐          │
-│                              │ Google APIs     │          │
-│                              │ Calendar, Gmail │          │
-│                              └────────────────┘          │
-└──────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│ Azure Container Apps Environment                              │
+│                                                                │
+│  ┌─────────────────────┐    ┌──────────────────────────┐      │
+│  │ Frontend (external)  │    │ Backend (internal)        │      │
+│  │ Next.js 16           │───▶│ FastAPI                   │      │
+│  │ Port 3000            │    │ Port 8000                 │      │
+│  │                      │    │                           │      │
+│  │ - Auth.js v5         │    │ - LangGraph ReAct Agent   │      │
+│  │ - Chat UI            │    │ - Google Calendar Tools   │      │
+│  │ - Calendar View      │    │ - Content Safety Guards   │      │
+│  │ - proxy.ts auth gate │    │ - Token management        │      │
+│  └──────────┬──────────┘    └────────┬──────────────────┘      │
+│             │                        │                          │
+│             │  ┌─────────────────┐   │  Managed Identity (RBAC) │
+│             └──┤ Azure Key Vault ├───┘  ────────────────────┐   │
+│                │ App secrets     │                           │   │
+│                │ (Fernet, OAuth, │                           │   │
+│                │  Redis pwd)     │                           │   │
+│                └─────────────────┘                           │   │
+│                                                              │   │
+│  ┌───────────────┐  ┌───────────────┐  ┌────────────────┐   │   │
+│  │ Azure Cache   │  │ Azure OpenAI  │  │ Azure AI       │◀──┘   │
+│  │ for Redis     │  │ GPT-4o        │  │ Search         │       │
+│  │ Port 6380 TLS │  │ embed-3-small │  │ Hybrid index   │       │
+│  └───────────────┘  └───────────────┘  └────────────────┘       │
+│                              │                                   │
+│                      ┌───────▼────────┐                         │
+│                      │ Google APIs     │                         │
+│                      │ Calendar, Gmail │                         │
+│                      └────────────────┘                         │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
 ### Service Communication
 - Frontend → Backend: HTTP via internal FQDN `http://backend-app-name`
-- Backend → Redis: TLS on port 6380
-- Backend → Azure OpenAI: HTTPS with Entra ID auth (production) or API key (dev)
+- Backend → Redis: TLS on port 6380, password from Key Vault (Entra ID auth deferred to Phase 2)
+- Backend → Azure OpenAI: Managed Identity via `DefaultAzureCredential` (RBAC role: `Cognitive Services OpenAI User`)
+- Backend → Azure AI Search: Managed Identity via `DefaultAzureCredential` (RBAC role: `Search Index Data Contributor`)
+- Backend → Azure AI Content Safety: Managed Identity via `DefaultAzureCredential` (RBAC role: `Cognitive Services User`)
 - Backend → Google APIs: OAuth2 with user's tokens from Redis
-- Backend → Azure AI Search: HTTPS with API key
+- Container Apps → Key Vault: User Assigned Managed Identity (RBAC role: `Key Vault Secrets User`)
+- Container Apps → ACR: User Assigned Managed Identity (RBAC role: `AcrPull`)
+
+### Identity & Secrets Strategy
+- **No API keys in any environment.** Local dev uses `az login` via `DefaultAzureCredential`. Production uses User Assigned Managed Identity.
+- **Key Vault** stores app secrets (Fernet key, Google OAuth credentials, Auth.js secret, canary token, Redis password). Container Apps reference KV secrets via `key_vault_secret_id` in secret blocks — secrets are injected as environment variables at container startup.
+- **User Assigned Identity** (not System Assigned) is created in the Key Vault Terraform module and attached to Container Apps. This avoids a chicken-and-egg deployment race: the identity must have KV access before the Container App is created, since Azure validates KV secret references at deployment time.
 
 ---
 
@@ -188,9 +204,10 @@ infra/
 │       ├── outputs.tf
 │       └── terraform.tfvars
 └── modules/
-    ├── container-apps/              # Environment + 2 Container Apps
-    ├── redis/                       # Azure Cache for Redis
-    └── ai-services/                 # OpenAI + AI Search + Content Safety
+    ├── key-vault/                   # Key Vault (RBAC) + User Assigned Managed Identity
+    ├── container-apps/              # Environment + 2 Container Apps (uses identity from key-vault)
+    ├── redis/                       # Azure Cache for Redis (stores password in Key Vault)
+    └── ai-services/                 # OpenAI + AI Search + Content Safety (RBAC roles for identity)
 ```
 
 ---
@@ -457,9 +474,9 @@ Ingestion runs as a **FastAPI BackgroundTask** triggered from the auth callback.
 ### Frontend (.env)
 
 ```
-AUTH_SECRET=                      # Random 32-byte secret for Auth.js
-AUTH_GOOGLE_ID=                   # Google OAuth client ID
-AUTH_GOOGLE_SECRET=               # Google OAuth client secret
+AUTH_SECRET=                      # Random 32-byte secret for Auth.js (Key Vault in prod)
+AUTH_GOOGLE_ID=                   # Google OAuth client ID (Key Vault in prod)
+AUTH_GOOGLE_SECRET=               # Google OAuth client secret (Key Vault in prod)
 NEXT_PUBLIC_API_URL=              # Backend URL (internal in production)
 AUTH_TRUST_HOST=true              # Required behind reverse proxy
 ```
@@ -467,30 +484,31 @@ AUTH_TRUST_HOST=true              # Required behind reverse proxy
 ### Backend (.env)
 
 ```
-# Azure OpenAI
+# Azure OpenAI — no API key; uses DefaultAzureCredential (az login in dev, managed identity in prod)
 AZURE_OPENAI_ENDPOINT=            # https://<resource>.openai.azure.com/
-AZURE_OPENAI_API_KEY=             # Or use Entra ID in production
 AZURE_OPENAI_DEPLOYMENT=gpt-4o
 AZURE_OPENAI_API_VERSION=2024-10-21
 AZURE_OPENAI_EMBED_DEPLOYMENT=text-embedding-3-small
 
-# Azure AI Search
+# Azure AI Search — no API key; uses DefaultAzureCredential
 AZURE_SEARCH_ENDPOINT=            # https://<search>.search.windows.net
-AZURE_SEARCH_KEY=
 AZURE_SEARCH_INDEX=calendar-context
 
-# Azure AI Content Safety
+# Azure AI Content Safety — no API key; uses DefaultAzureCredential
 AZURE_CONTENT_SAFETY_ENDPOINT=
-AZURE_CONTENT_SAFETY_KEY=
+
+# Azure Managed Identity (optional — only needed in prod for User Assigned Identity)
+AZURE_MANAGED_IDENTITY_CLIENT_ID= # Client ID of the User Assigned Identity
 
 # Redis
-REDIS_URL=rediss://:<password>@<host>:6380/0
+REDIS_URL=redis://localhost:6379/0  # Local dev (no password); prod uses Key Vault-injected connection string
 
-# Security
+# Security (Key Vault in prod, .env in local dev)
 FERNET_KEY=                       # Generate: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+CANARY_TOKEN=                     # Random string for prompt injection detection
 CORS_ORIGINS=http://localhost:3000
 
-# Google (for direct API calls from backend)
+# Google (for direct API calls from backend; Key Vault in prod)
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 ```
@@ -565,14 +583,15 @@ GOOGLE_CLIENT_SECRET=
 - **#19** Content Safety guardrails (needs #16, MUST follow #18; integration test needs #48)
 
 **Infra (parallel, only needs #47):**
-- **#48** Terraform module: AI services — OpenAI, AI Search, Content Safety
-- **#49** Terraform module: Azure Cache for Redis
+- **#48** Terraform module: AI services — OpenAI, AI Search, Content Safety (RBAC roles, no key outputs)
+- **#64** Terraform module: Key Vault + User Assigned Managed Identity (needs #47)
+- **#49** Terraform module: Azure Cache for Redis (needs #64 — stores password in Key Vault)
 
 ### Phase 4: Polish + Deploy (Day 2, Hours 5-8)
 - **#15** Background ingestion pipeline (needs #14, #10, #20, #21, #59)
 - **#26** Dockerfiles (needs working frontend + backend)
-- **#50** Terraform module: Container Apps (needs #47, #26 — only module needing Docker images)
-- **#51** Dev environment root module wiring (needs #48, #49, #50)
+- **#50** Terraform module: Container Apps (needs #64, #26 — uses identity from Key Vault module)
+- **#51** Dev environment root module wiring (needs #48, #49, #50, #64)
 
 ### Cut if behind schedule
 - **#25** Settings page — defer, use env vars
@@ -639,3 +658,7 @@ Decisions are appended here as they're made. Old decisions are kept but marked s
 | 2026-03-15 | 1-hour cooldown between ingestion syncs | Prevents redundant work for frequent logins; delta sync is cheap but not free (API calls + conditional re-embedding) |
 | 2026-03-15 | FastAPI BackgroundTasks for MVP ingestion | Benign failure mode (retry on next login); avoids adding a third deployment unit; clean interface enables future migration to Durable Functions |
 | 2026-03-15 | Lazy cleanup for MVP, TTL job deferred to Phase 2 | Per-user data volume is ~MB scale; premature cleanup adds complexity without meaningful cost savings |
+| 2026-03-15 | Managed Identity + `DefaultAzureCredential` for all Azure services — no API keys | Eliminates secret rotation burden, uses `az login` in dev and User Assigned Identity in prod; same code path in both environments |
+| 2026-03-15 | Key Vault (RBAC mode) for app secrets | Fernet key, Google OAuth, Auth.js secret, canary token, Redis password stored in KV; Container Apps inject as env vars via `key_vault_secret_id` — code never touches KV SDK |
+| 2026-03-15 | User Assigned Identity over System Assigned | System Assigned creates chicken-and-egg: identity doesn't exist until Container App is created, but KV access is validated at deployment time; User Assigned is created first and granted access before Container App references it |
+| 2026-03-15 | Redis password+TLS via Key Vault; Entra ID auth deferred to Phase 2 | Entra ID for Redis requires custom `CredentialProvider` with token refresh every ~45min; password via KV is simpler and secure enough for MVP |
