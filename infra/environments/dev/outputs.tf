@@ -22,3 +22,45 @@ output "common_tags" {
   description = "Common tags applied to all resources"
   value       = local.common_tags
 }
+
+# AI Services outputs
+
+output "openai_endpoint" {
+  description = "Azure OpenAI endpoint URL"
+  value       = module.ai_services.openai_endpoint
+}
+
+output "search_endpoint" {
+  description = "Azure AI Search endpoint URL"
+  value       = module.ai_services.search_endpoint
+}
+
+output "openai_deployment_name" {
+  description = "Name of the GPT-4o model deployment"
+  value       = module.ai_services.openai_deployment_name
+}
+
+output "openai_embed_deployment_name" {
+  description = "Name of the text-embedding-3-small model deployment"
+  value       = module.ai_services.openai_embed_deployment_name
+}
+
+output "content_safety_endpoint" {
+  description = "Azure AI Content Safety endpoint URL"
+  value       = module.ai_services.content_safety_endpoint
+}
+
+output "backend_identity_id" {
+  description = "Resource ID of the backend User Assigned Managed Identity"
+  value       = module.ai_services.backend_identity_id
+}
+
+output "backend_identity_client_id" {
+  description = "Client ID of the backend User Assigned Managed Identity"
+  value       = module.ai_services.backend_identity_client_id
+}
+
+output "backend_identity_principal_id" {
+  description = "Principal ID of the backend User Assigned Managed Identity"
+  value       = module.ai_services.backend_identity_principal_id
+}
