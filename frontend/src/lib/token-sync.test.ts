@@ -81,6 +81,24 @@ describe("syncTokenToBackend", () => {
     ]);
   });
 
+  it("should skip sync when scope is undefined", async () => {
+    const mockFetch = mockFetchSuccess();
+    vi.stubGlobal("fetch", mockFetch);
+
+    await syncTokenToBackend({ ...baseToken, scope: undefined });
+
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("should skip sync when scope is empty string", async () => {
+    const mockFetch = mockFetchSuccess();
+    vi.stubGlobal("fetch", mockFetch);
+
+    await syncTokenToBackend({ ...baseToken, scope: "" });
+
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
   it("should skip sync when idToken is missing", async () => {
     const mockFetch = mockFetchSuccess();
     vi.stubGlobal("fetch", mockFetch);
@@ -138,6 +156,17 @@ describe("syncTokenToBackend", () => {
 
     await syncTokenToBackend(baseToken);
 
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("should make exactly 2 calls when first returns non-ok and retry throws", async () => {
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, status: 500 })
+      .mockRejectedValueOnce(new Error("Network failure"));
+    vi.stubGlobal("fetch", mockFetch);
+
+    await expect(syncTokenToBackend(baseToken)).resolves.toBeUndefined();
     expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 

@@ -17,6 +17,10 @@ export async function syncTokenToBackend(token: JWT): Promise<void> {
   const scopes =
     typeof scope === "string" ? scope.split(" ").filter(Boolean) : [];
 
+  if (scopes.length === 0) {
+    return;
+  }
+
   const body = JSON.stringify({
     access_token: accessToken,
     refresh_token: refreshToken,
@@ -34,19 +38,17 @@ export async function syncTokenToBackend(token: JWT): Promise<void> {
       body,
     });
 
-  try {
-    const response = await doSync();
-    if (!response.ok) {
-      const retry = await doSync();
-      if (!retry.ok) {
-        console.error(`[token-sync] Failed after retry: ${retry.status}`);
-      }
-    }
-  } catch {
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
-      await doSync();
+      const response = await doSync();
+      if (response.ok) return;
+      if (attempt === 2) {
+        console.error(`[token-sync] Failed after retry: ${response.status}`);
+      }
     } catch {
-      console.error("[token-sync] Failed after retry: network error");
+      if (attempt === 2) {
+        console.error("[token-sync] Failed after retry: network error");
+      }
     }
   }
 }

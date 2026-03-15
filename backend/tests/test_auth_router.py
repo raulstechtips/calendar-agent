@@ -255,6 +255,30 @@ class TestAuthRefreshEndpoint:
 
         assert response.status_code == 502
 
+    async def test_should_return_502_when_google_returns_invalid_json(
+        self,
+        client: httpx.AsyncClient,
+        mock_user: UserResponse,
+    ) -> None:
+        _override_user(mock_user)
+
+        bad_json_resp = MagicMock()
+        bad_json_resp.ok = True
+        bad_json_resp.status_code = 200
+        bad_json_resp.json.side_effect = ValueError("invalid json")
+
+        with (
+            patch(
+                "app.auth.service.get_token",
+                new_callable=AsyncMock,
+                return_value=_sample_stored_token(),
+            ),
+            patch("app.auth.service.requests.post", return_value=bad_json_resp),
+        ):
+            response = await client.post("/api/auth/refresh")
+
+        assert response.status_code == 502
+
     async def test_should_store_updated_token_after_refresh(
         self,
         client: httpx.AsyncClient,
@@ -282,6 +306,49 @@ class TestAuthRefreshEndpoint:
         mock_store.assert_awaited_once()
         stored: StoredToken = mock_store.call_args[0][1]
         assert stored.access_token == "refreshed-access-token"
+
+    async def test_should_store_rotated_refresh_token(
+        self,
+        client: httpx.AsyncClient,
+        mock_user: UserResponse,
+    ) -> None:
+        _override_user(mock_user)
+
+        with (
+            patch(
+                "app.auth.service.get_token",
+                new_callable=AsyncMock,
+                return_value=_sample_stored_token(),
+            ),
+            patch(
+                "app.auth.service.requests.post",
+                return_value=_google_refresh_response(
+                    refresh_token="rotated-refresh-token",
+                ),
+            ),
+            patch("app.auth.service.store_token", new_callable=AsyncMock) as mock_store,
+        ):
+            response = await client.post("/api/auth/refresh")
+
+        assert response.status_code == 200
+        stored: StoredToken = mock_store.call_args[0][1]
+        assert stored.refresh_token == "rotated-refresh-token"
+
+    async def test_should_return_500_on_decryption_failure(
+        self,
+        client: httpx.AsyncClient,
+        mock_user: UserResponse,
+    ) -> None:
+        _override_user(mock_user)
+
+        with patch(
+            "app.auth.service.get_token",
+            new_callable=AsyncMock,
+            side_effect=TokenEncryptionError("corrupted"),
+        ):
+            response = await client.post("/api/auth/refresh")
+
+        assert response.status_code == 500
 
 
 class TestAuthRevokeEndpoint:
@@ -333,6 +400,22 @@ class TestAuthRevokeEndpoint:
             response = await client.delete("/api/auth/revoke")
 
         assert response.status_code == 404
+
+    async def test_should_return_500_on_decryption_failure(
+        self,
+        client: httpx.AsyncClient,
+        mock_user: UserResponse,
+    ) -> None:
+        _override_user(mock_user)
+
+        with patch(
+            "app.auth.service.get_token",
+            new_callable=AsyncMock,
+            side_effect=TokenEncryptionError("corrupted"),
+        ):
+            response = await client.delete("/api/auth/revoke")
+
+        assert response.status_code == 500
 
     async def test_should_delete_from_redis_even_if_google_revoke_fails(
         self,

@@ -76,7 +76,16 @@ async def refresh_user_token(user_id: str) -> TokenRefreshResponse:
         )
         raise HTTPException(status_code=502, detail="Google token refresh failed")
 
-    data = response.json()
+    try:
+        data = response.json()
+    except ValueError:
+        logger.warning(
+            "Google token refresh returned invalid JSON for user %s", user_id
+        )
+        raise HTTPException(
+            status_code=502, detail="Google token refresh failed"
+        ) from None
+
     new_access_token = data.get("access_token")
     expires_in = data.get("expires_in")
     if not isinstance(new_access_token, str) or not isinstance(expires_in, int):
@@ -111,16 +120,22 @@ async def revoke_user_token(user_id: str) -> None:
 
     loop = asyncio.get_running_loop()
     try:
-        await loop.run_in_executor(
+        response = await loop.run_in_executor(
             None,
             partial(
                 requests.post,
                 GOOGLE_REVOKE_URL,
-                params={"token": stored.refresh_token},
+                data={"token": stored.refresh_token},
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
                 timeout=_GOOGLE_TIMEOUT,
             ),
         )
+        if not response.ok:
+            logger.warning(
+                "Google revoke returned %s for user %s",
+                response.status_code,
+                user_id,
+            )
     except requests.RequestException:
         logger.warning(
             "Google revoke network error for user %s — clearing Redis anyway",
