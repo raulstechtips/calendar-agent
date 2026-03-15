@@ -207,7 +207,6 @@ class TestGetToken:
         ):
             await get_token("user-123")
 
-
     async def test_should_raise_encryption_error_for_malformed_metadata(
         self,
         mock_redis: AsyncMock,

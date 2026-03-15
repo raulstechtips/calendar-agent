@@ -103,9 +103,7 @@ async def get_token(user_id: str) -> StoredToken:
             scopes=json.loads(data["scopes"]),
         )
     except (InvalidToken, KeyError, ValueError, json.JSONDecodeError) as e:
-        raise TokenEncryptionError(
-            f"Token decryption failed for user {user_id}"
-        ) from e
+        raise TokenEncryptionError(f"Token decryption failed for user {user_id}") from e
 
 
 async def delete_token(user_id: str) -> None:

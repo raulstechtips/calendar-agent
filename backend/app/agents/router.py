@@ -12,6 +12,8 @@ from langgraph.graph.state import CompiledStateGraph
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.agents.calendar_agent import build_thread_id, get_agent
+from app.auth.dependencies import get_current_user
+from app.users.schemas import UserResponse
 
 logger = logging.getLogger(__name__)
 
@@ -60,11 +62,11 @@ async def _stream_response(
 @router.post("/api/chat")
 async def chat(
     request: ChatRequest,
+    user: UserResponse = Depends(get_current_user),  # noqa: B008
     agent: CompiledStateGraph = Depends(get_agent),  # type: ignore[type-arg]  # noqa: B008
 ) -> StreamingResponse:
     """Send a message to the agent and receive an SSE stream response."""
-    # TODO: Replace with real auth from #9/#10/#11
-    user_id = "dev-user"
+    user_id = user.id
 
     if request.thread_id and request.thread_id.startswith(f"user-{user_id}:session-"):
         thread_id = request.thread_id

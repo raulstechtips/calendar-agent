@@ -16,6 +16,7 @@ dependencies = [
     "slowapi>=0.1.9",
     "asgi-correlation-id>=4.3.0",
     "cryptography",
+    "google-auth>=2.49.1",
 ]
 
 [dependency-groups]
