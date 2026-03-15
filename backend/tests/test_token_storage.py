@@ -32,7 +32,7 @@ def fernet_key() -> str:
 
 @pytest.fixture
 def fake_settings(fernet_key: str) -> SimpleNamespace:
-    return SimpleNamespace(fernet_key=fernet_key, redis_url="redis://localhost:6379/0")
+    return SimpleNamespace(fernet_key=fernet_key)
 
 
 @pytest.fixture
@@ -122,7 +122,7 @@ class TestStoreToken:
         expected_ttl = future_time - int(time.time()) - 300
         assert abs(actual_ttl - expected_ttl) <= 2
 
-    async def test_should_skip_ttl_when_already_expired(
+    async def test_should_use_fallback_ttl_when_already_expired(
         self,
         mock_redis: AsyncMock,
         fake_settings: SimpleNamespace,
@@ -141,7 +141,9 @@ class TestStoreToken:
         ):
             await store_token("user-123", token)
 
-        mock_redis.expire.assert_not_awaited()
+        mock_redis.expire.assert_awaited_once()
+        actual_ttl = mock_redis.expire.call_args.args[1]
+        assert actual_ttl == 60
 
 
 class TestGetToken:
@@ -197,6 +199,43 @@ class TestGetToken:
             "scopes": '["openid"]',
         }
         mock_redis.hgetall.return_value = corrupted_data
+
+        with (
+            patch("app.auth.token_storage.get_redis", return_value=mock_redis),
+            patch("app.auth.token_storage.settings", fake_settings),
+            pytest.raises(TokenEncryptionError, match="decryption failed"),
+        ):
+            await get_token("user-123")
+
+
+    async def test_should_raise_encryption_error_for_malformed_metadata(
+        self,
+        mock_redis: AsyncMock,
+        fake_settings: SimpleNamespace,
+        fernet_key: str,
+    ) -> None:
+        fernet = Fernet(fernet_key.encode())
+        malformed_data = {
+            "access_token": fernet.encrypt(b"valid-token").decode(),
+            "refresh_token": fernet.encrypt(b"valid-refresh").decode(),
+            "expires_at": "not-an-integer",
+            "scopes": "not-valid-json{",
+        }
+        mock_redis.hgetall.return_value = malformed_data
+
+        with (
+            patch("app.auth.token_storage.get_redis", return_value=mock_redis),
+            patch("app.auth.token_storage.settings", fake_settings),
+            pytest.raises(TokenEncryptionError, match="decryption failed"),
+        ):
+            await get_token("user-123")
+
+    async def test_should_raise_encryption_error_for_missing_fields(
+        self,
+        mock_redis: AsyncMock,
+        fake_settings: SimpleNamespace,
+    ) -> None:
+        mock_redis.hgetall.return_value = {"expires_at": "1700000000"}
 
         with (
             patch("app.auth.token_storage.get_redis", return_value=mock_redis),

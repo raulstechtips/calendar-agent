@@ -18,7 +18,12 @@ class TokenEncryptionError(Exception):
     """Raised when Fernet key is missing/invalid or decryption fails."""
 
 
+_FALLBACK_TTL = 60
+
+
 class StoredToken(BaseModel):
+    model_config = {"extra": "forbid"}
+
     access_token: str
     refresh_token: str
     expires_at: int
@@ -36,7 +41,7 @@ def _get_fernet() -> Fernet:
             raise TokenEncryptionError("FERNET_KEY not configured")
         try:
             _fernet = Fernet(settings.fernet_key.encode())
-        except (ValueError, Exception) as e:
+        except ValueError as e:
             raise TokenEncryptionError(f"Invalid FERNET_KEY: {e}") from e
     return _fernet
 
@@ -70,15 +75,19 @@ async def store_token(user_id: str, token_data: StoredToken) -> None:
     await redis.hset(key, mapping=mapping)  # type: ignore[misc]
 
     ttl = token_data.expires_at - int(time.time()) - 300
-    if ttl > 0:
-        await redis.expire(key, ttl)
+    await redis.expire(key, ttl if ttl > 0 else _FALLBACK_TTL)
 
 
 async def get_token(user_id: str) -> StoredToken:
-    """Retrieve and decrypt OAuth token from Redis."""
+    """Retrieve and decrypt OAuth token from Redis.
+
+    Returns the token regardless of expiry — callers are responsible for
+    checking ``expires_at`` and refreshing when needed.
+    """
     key = _token_key(user_id)
     redis = get_redis()
 
+    # decode_responses=True guarantees str values from Redis
     data: dict[str, str] = await redis.hgetall(key)  # type: ignore[misc]
     if not data:
         raise TokenNotFoundError(f"No token found for user {user_id}")
@@ -87,17 +96,16 @@ async def get_token(user_id: str) -> StoredToken:
     try:
         access_token = fernet.decrypt(data["access_token"].encode()).decode()
         refresh_token = fernet.decrypt(data["refresh_token"].encode()).decode()
-    except InvalidToken as e:
+        return StoredToken(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            expires_at=int(data["expires_at"]),
+            scopes=json.loads(data["scopes"]),
+        )
+    except (InvalidToken, KeyError, ValueError, json.JSONDecodeError) as e:
         raise TokenEncryptionError(
             f"Token decryption failed for user {user_id}"
         ) from e
-
-    return StoredToken(
-        access_token=access_token,
-        refresh_token=refresh_token,
-        expires_at=int(data["expires_at"]),
-        scopes=json.loads(data["scopes"]),
-    )
 
 
 async def delete_token(user_id: str) -> None:
