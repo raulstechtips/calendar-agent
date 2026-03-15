@@ -66,6 +66,15 @@ IMPORTANT: Follow these rules strictly:
 - `/sync-issues [area]` — Check issue status against actual code state
 - `/update-decision` — Record an architecture/product decision into SPEC.md and update affected issues
 
+### Contextual Skills (Frontend)
+
+Auto-available when working on `frontend/**`. See `.claude/rules/frontend.md` for usage guidance.
+
+- `shadcn` — shadcn/ui component management
+- `ui-ux-pro-max` — UI/UX design intelligence
+- `vercel-react-best-practices` — React/Next.js performance patterns
+- `vercel-composition-patterns` — React component architecture
+
 ## Decision Workflow
 
 When a decision is made (by the user or during implementation):

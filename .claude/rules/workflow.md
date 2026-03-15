@@ -11,7 +11,7 @@ Follow this exact process for every story/task:
 1. **Read the issue**: `gh issue view <number>` — understand acceptance criteria before writing code
 2. **Read the spec**: `.claude/specs/in-progress/SPEC.md` — understand architecture context
 3. **Explore existing code**: search for existing patterns to follow before writing anything new
-4. **Plan briefly**: list files to create/modify and patterns to follow
+4. **Plan thoroughly**: list files to create/modify, patterns to follow, and review the SPEC's Security Constraints section — for each constraint that applies to this story, note how the implementation will satisfy it
 5. **Write failing tests first** (Red phase) — see tdd.md
 6. **Implement minimum code to pass tests** (Green phase)
 7. **Refactor** while tests stay green
