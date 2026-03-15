@@ -35,9 +35,9 @@ variable "soft_delete_retention_days" {
 }
 
 variable "purge_protection_enabled" {
-  description = "Whether purge protection is enabled on the Key Vault"
+  description = "Whether purge protection is enabled on the Key Vault (default true for safety; override to false in dev)"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "sku_name" {
