@@ -58,48 +58,62 @@ Dependencies managed in `pyproject.toml` + `uv.lock` (committed to git). No requ
 ## Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│ Azure Container Apps Environment                              │
-│                                                                │
-│  ┌─────────────────────┐    ┌──────────────────────────┐      │
-│  │ Frontend (external)  │    │ Backend (internal)        │      │
-│  │ Next.js 16           │───▶│ FastAPI                   │      │
-│  │ Port 3000            │    │ Port 8000                 │      │
-│  │                      │    │                           │      │
-│  │ - Auth.js v5         │    │ - LangGraph ReAct Agent   │      │
-│  │ - Chat UI            │    │ - Google Calendar Tools   │      │
-│  │ - Calendar View      │    │ - Content Safety Guards   │      │
-│  │ - proxy.ts auth gate │    │ - Token management        │      │
-│  └──────────┬──────────┘    └────────┬──────────────────┘      │
-│             │                        │                          │
-│             │  ┌─────────────────┐   │  Managed Identity (RBAC) │
-│             └──┤ Azure Key Vault ├───┘  ────────────────────┐   │
-│                │ App secrets     │                           │   │
-│                │ (Fernet, OAuth, │                           │   │
-│                │  Redis pwd)     │                           │   │
-│                └─────────────────┘                           │   │
-│                                                              │   │
-│  ┌───────────────┐  ┌───────────────┐  ┌────────────────┐   │   │
-│  │ Azure Cache   │  │ Azure OpenAI  │  │ Azure AI       │◀──┘   │
-│  │ for Redis     │  │ GPT-4o        │  │ Search         │       │
-│  │ Port 6380 TLS │  │ embed-3-small │  │ Hybrid index   │       │
-│  └───────────────┘  └───────────────┘  └────────────────┘       │
-│                              │                                   │
-│                      ┌───────▼────────┐                         │
-│                      │ Google APIs     │                         │
-│                      │ Calendar, Gmail │                         │
-│                      └────────────────┘                         │
-└──────────────────────────────────────────────────────────────────┘
+┌─────────────────── VNet: 10.0.0.0/16 ──────────────────────────┐
+│                                                                  │
+│  ┌─────────── snet-cae (10.0.0.0/23) ───────────────────────┐   │
+│  │ Container Apps Environment (workload profiles, VNet-integrated)│
+│  │                                                            │   │
+│  │  ┌─────────────────────┐    ┌──────────────────────────┐  │   │
+│  │  │ Frontend (external)  │    │ Backend (internal)        │  │   │
+│  │  │ Next.js 16           │───▶│ FastAPI                   │  │   │
+│  │  │ Port 3000            │    │ Port 8000                 │  │   │
+│  │  │                      │    │                           │  │   │
+│  │  │ - Auth.js v5         │    │ - LangGraph ReAct Agent   │  │   │
+│  │  │ - Chat UI            │    │ - Google Calendar Tools   │  │   │
+│  │  │ - Calendar View      │    │ - Content Safety Guards   │  │   │
+│  │  │ - proxy.ts auth gate │    │ - Token management        │  │   │
+│  │  └──────────┬──────────┘    └────────┬──────────────────┘  │   │
+│  └─────────────┼────────────────────────┼─────────────────────┘   │
+│                │                        │                          │
+│  ┌─────────── snet-pe (10.0.2.0/27) ── │ ── Private Endpoints ┐  │
+│  │             │                        │                      │  │
+│  │  ┌──────── ▼ ────────┐   ┌──────────▼─────────────────┐   │  │
+│  │  │ PE: Key Vault     │   │ PE: Redis                   │   │  │
+│  │  │ (Fernet, OAuth,   │   │ Port 6380 TLS               │   │  │
+│  │  │  Redis pwd)       │   │                              │   │  │
+│  │  └───────────────────┘   └──────────────────────────────┘   │  │
+│  │                                                             │  │
+│  │  ┌───────────────┐  ┌───────────────┐  ┌────────────────┐  │  │
+│  │  │ PE: OpenAI    │  │ PE: AI Search │  │ PE: Content    │  │  │
+│  │  │ GPT-4o        │  │ Hybrid index  │  │ Safety         │  │  │
+│  │  │ embed-3-small │  │               │  │                │  │  │
+│  │  └───────────────┘  └───────────────┘  └────────────────┘  │  │
+│  └────────────────────────────────────────────────────────────┘   │
+│                                                                   │
+│  Private DNS Zones (linked to VNet):                              │
+│    privatelink.vaultcore.azure.net                                 │
+│    privatelink.redis.cache.windows.net                             │
+│    privatelink.openai.azure.com                                    │
+│    privatelink.search.windows.net                                  │
+│    privatelink.cognitiveservices.azure.com                         │
+└───────────────────────────────────────────────────────────────────┘
+          │                                    │
+  ┌───────▼────────┐               ┌───────────▼──────────┐
+  │ Google APIs     │               │ Terraform deployer   │
+  │ Calendar, Gmail │               │ (IP-allowlisted via  │
+  │ (OAuth2, public)│               │  network_acls)       │
+  └────────────────┘               └──────────────────────┘
 ```
 
 ### Service Communication
+- All Azure service traffic traverses the VNet via Private Endpoints — no public internet traversal for service-to-service communication.
 - Frontend → Backend: HTTP via internal FQDN `http://backend-app-name`
-- Backend → Redis: TLS on port 6380, password from Key Vault (Entra ID auth deferred to Phase 2)
-- Backend → Azure OpenAI: Managed Identity via `DefaultAzureCredential` (RBAC role: `Cognitive Services OpenAI User`)
-- Backend → Azure AI Search: Managed Identity via `DefaultAzureCredential` (RBAC role: `Search Index Data Contributor`)
-- Backend → Azure AI Content Safety: Managed Identity via `DefaultAzureCredential` (RBAC role: `Cognitive Services User`)
-- Backend → Google APIs: OAuth2 with user's tokens from Redis
-- Container Apps → Key Vault: User Assigned Managed Identity (RBAC role: `Key Vault Secrets User`)
+- Backend → Redis: TLS on port 6380, password from Key Vault, via PE (Entra ID auth deferred to Phase 2)
+- Backend → Azure OpenAI: Managed Identity via `DefaultAzureCredential`, via PE (RBAC role: `Cognitive Services OpenAI User`)
+- Backend → Azure AI Search: Managed Identity via `DefaultAzureCredential`, via PE (RBAC role: `Search Index Data Contributor`)
+- Backend → Azure AI Content Safety: Managed Identity via `DefaultAzureCredential`, via PE (RBAC role: `Cognitive Services User`)
+- Backend → Google APIs: OAuth2 with user's tokens from Redis (public internet — no Azure PE)
+- Container Apps → Key Vault: User Assigned Managed Identity via PE (RBAC role: `Key Vault Secrets User`)
 - Container Apps → ACR: User Assigned Managed Identity (RBAC role: `AcrPull`)
 
 ### Identity & Secrets Strategy
@@ -109,6 +123,21 @@ Dependencies managed in `pyproject.toml` + `uv.lock` (committed to git). No requ
   - **Shared identity** (`id-calendaragent-dev-eus`) — created in Key Vault module (#64). Granted `Key Vault Secrets User` on Key Vault and `AcrPull` on ACR. Attached to **both** Container Apps. Both apps need KV secrets and image pull access.
   - **Backend identity** (`id-backend-calendaragent-dev-eus`) — created in AI services module (#48). Granted `Cognitive Services OpenAI User` on OpenAI, `Search Index Data Contributor` on AI Search, `Cognitive Services User` on Content Safety. Attached to **backend Container App only**. The frontend has no reason to access AI services directly.
 - User Assigned (not System Assigned) avoids a chicken-and-egg deployment race: the identity must have KV access before the Container App is created, since Azure validates KV secret references at deployment time.
+
+### Network Security Strategy
+- **Defense-in-depth**: RBAC via Managed Identity (Layer 1) + network isolation via Private Endpoints (Layer 2). Both layers are always active.
+- **VNet topology**: Single VNet (`vnet-calendaragent-dev-eus`, `10.0.0.0/16`) with two subnets:
+  - `snet-cae-calendaragent-dev-eus` (`10.0.0.0/23`) — dedicated to Container Apps Environment, delegated to `Microsoft.App/environments`
+  - `snet-pe-calendaragent-dev-eus` (`10.0.2.0/27`) — hosts Private Endpoints for all Azure services
+- **Private Endpoints**: Every Azure service (Key Vault, Redis, OpenAI, AI Search, Content Safety) gets a Private Endpoint in the PE subnet. Services set `public_network_access_enabled = true` with `network_acls { default_action = "Deny" }` + deployer IP allowlisting. Container Apps reach services via private IPs — no public internet traversal. PE traffic bypasses network ACLs entirely.
+- **Private DNS Zones**: 5 zones (one per service type) linked to the VNet for transparent DNS resolution. Application code uses the same service URLs — DNS resolves to private IPs inside the VNet:
+  - `privatelink.vaultcore.azure.net` (Key Vault)
+  - `privatelink.redis.cache.windows.net` (Redis)
+  - `privatelink.openai.azure.com` (Azure OpenAI)
+  - `privatelink.search.windows.net` (AI Search)
+  - `privatelink.cognitiveservices.azure.com` (Content Safety)
+- **Deployer access**: Terraform deployer (laptop/CI) accesses services via public endpoint filtered by `ip_rules` / `allowed_ips`. `bypass = "AzureServices"` allows Azure ARM operations. Production would switch to `public_network_access_enabled = false` with a self-hosted runner.
+- **Module ownership**: Networking module (#71) creates VNet, subnets, and DNS zones. Each service module creates its own Private Endpoint and configures its own `network_acls` / firewall rules.
 
 ---
 
@@ -207,10 +236,11 @@ infra/
 │       ├── outputs.tf
 │       └── terraform.tfvars
 └── modules/
-    ├── key-vault/                   # Key Vault (RBAC) + User Assigned Managed Identity
-    ├── container-apps/              # Environment + 2 Container Apps (uses identity from key-vault)
-    ├── redis/                       # Azure Cache for Redis (stores password in Key Vault)
-    └── ai-services/                 # OpenAI + AI Search + Content Safety (RBAC roles for identity)
+    ├── networking/                  # VNet, subnets, Private DNS zones
+    ├── key-vault/                   # Key Vault (RBAC) + User Assigned Managed Identity + PE
+    ├── container-apps/              # Environment (VNet-integrated) + 2 Container Apps
+    ├── redis/                       # Azure Cache for Redis + PE (stores password in Key Vault)
+    └── ai-services/                 # OpenAI + AI Search + Content Safety + PEs (RBAC roles for identity)
 ```
 
 ---
@@ -514,6 +544,9 @@ CORS_ORIGINS=http://localhost:3000
 # Google (for direct API calls from backend; Key Vault in prod)
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
+
+# Infrastructure (Terraform only — not used by application code)
+DEPLOYER_IP_CIDRS=                # Terraform deployer IP CIDR(s) for service firewall allowlisting
 ```
 
 ---
@@ -588,13 +621,14 @@ GOOGLE_CLIENT_SECRET=
 **Infra (parallel, only needs #47):**
 - **#48** Terraform module: AI services — OpenAI, AI Search, Content Safety (RBAC roles, no key outputs)
 - **#64** Terraform module: Key Vault + User Assigned Managed Identity (needs #47)
-- **#49** Terraform module: Azure Cache for Redis (needs #64 — stores password in Key Vault)
+- **#71** Terraform module: VNet, Private Endpoints, network hardening (needs #47, #64, #48 — retrofits KV and AI services with PEs + network_acls)
+- **#49** Terraform module: Azure Cache for Redis (needs #64, #71 — PE + network_acls)
 
 ### Phase 4: Polish + Deploy (Day 2, Hours 5-8)
 - **#15** Background ingestion pipeline (needs #14, #10, #20, #21, #59)
 - **#26** Dockerfiles (needs working frontend + backend)
-- **#50** Terraform module: Container Apps (needs #64, #26 — uses identity from Key Vault module)
-- **#51** Dev environment root module wiring (needs #48, #49, #50, #64)
+- **#50** Terraform module: Container Apps (needs #64, #48, #26, #71 — VNet-integrated environment)
+- **#51** Dev environment root module wiring (needs #48, #49, #50, #64, #71)
 
 ### Cut if behind schedule
 - **#25** Settings page — defer, use env vars
@@ -665,3 +699,4 @@ Decisions are appended here as they're made. Old decisions are kept but marked s
 | 2026-03-15 | Key Vault (RBAC mode) for app secrets | Fernet key, Google OAuth, Auth.js secret, canary token, Redis password stored in KV; Container Apps inject as env vars via `key_vault_secret_id` — code never touches KV SDK |
 | 2026-03-15 | Two User Assigned Identities for least-privilege | Shared identity (KV + ACR) on both apps; backend-only identity (AI services) on backend only. Prevents frontend from accessing OpenAI/Search/Safety. User Assigned (not System Assigned) avoids chicken-and-egg deployment race |
 | 2026-03-15 | Redis password+TLS via Key Vault; Entra ID auth deferred to Phase 2 | Entra ID for Redis requires custom `CredentialProvider` with token refresh every ~45min; password via KV is simpler and secure enough for MVP |
+| 2026-03-15 | VNet + Private Endpoints for all Azure services (#71) | Defense-in-depth: RBAC is Layer 1 (auth), PE is Layer 2 (network). All 5 services get PEs in a dedicated subnet; public endpoints kept with Deny ACL + deployer IP allowlist for Terraform access. Networking module owns shared infra (VNet, subnets, DNS zones); each service module owns its own PE and `network_acls` |
