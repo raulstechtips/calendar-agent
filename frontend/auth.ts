@@ -5,13 +5,25 @@
  */
 import NextAuth, { type DefaultSession } from "next-auth";
 import Google from "next-auth/providers/google";
+import { refreshAccessToken } from "./src/lib/google-auth";
 
 declare module "next-auth" {
   interface Session {
     accessToken?: string;
+    error?: "RefreshTokenError";
     user: {
       id: string;
     } & DefaultSession["user"];
+  }
+}
+
+declare module "next-auth/jwt" {
+  interface JWT {
+    accessToken?: string;
+    refreshToken?: string;
+    expiresAt?: number;
+    scope?: string;
+    error?: "RefreshTokenError";
   }
 }
 
@@ -22,6 +34,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         params: {
           access_type: "offline",
           prompt: "consent",
+          include_granted_scopes: "true",
           scope: "openid email profile",
         },
       },
@@ -31,14 +44,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     signIn: "/login",
   },
   callbacks: {
-    jwt({ token, account }) {
+    async jwt({ token, account }) {
+      // Initial sign-in: capture tokens from Google OAuth response
       if (account) {
-        token.accessToken = account.access_token;
-        token.refreshToken = account.refresh_token;
-        token.expiresAt = account.expires_at;
-        token.scope = account.scope;
+        return {
+          ...token,
+          accessToken: account.access_token,
+          refreshToken: account.refresh_token,
+          expiresAt: account.expires_at,
+          scope: account.scope,
+        };
       }
-      return token;
+
+      // Token still valid (with 60-second buffer): return as-is
+      if (
+        typeof token.expiresAt === "number" &&
+        Date.now() < (token.expiresAt - 60) * 1000
+      ) {
+        return token;
+      }
+
+      // Token expired: refresh via Google's token endpoint
+      return refreshAccessToken(token);
     },
     session({ session, token }) {
       if (token.sub) {
@@ -46,6 +73,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
       if (typeof token.accessToken === "string") {
         session.accessToken = token.accessToken;
+      }
+      if (token.error) {
+        session.error = token.error;
       }
       return session;
     },
