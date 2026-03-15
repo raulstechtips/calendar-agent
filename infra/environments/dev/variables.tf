@@ -41,3 +41,35 @@ variable "subscription_id" {
     error_message = "Subscription ID must be a valid GUID format (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)."
   }
 }
+
+# --- App secrets (stored in Key Vault) ---
+
+variable "fernet_key" {
+  description = "Fernet encryption key for token storage"
+  type        = string
+  sensitive   = true
+}
+
+variable "google_client_id" {
+  description = "Google OAuth client ID"
+  type        = string
+  sensitive   = true
+}
+
+variable "google_client_secret" {
+  description = "Google OAuth client secret"
+  type        = string
+  sensitive   = true
+}
+
+variable "auth_secret" {
+  description = "Auth.js session secret"
+  type        = string
+  sensitive   = true
+}
+
+variable "canary_token" {
+  description = "Canary token for prompt injection detection"
+  type        = string
+  sensitive   = true
+}
