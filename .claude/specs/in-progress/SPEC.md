@@ -469,7 +469,7 @@ GOOGLE_CLIENT_SECRET=
 **Worktree C (can start mid-phase after #12 merges):**
 - **#16** ReAct agent setup (needs #12)
 
-### Phase 2: Auth + Agent Core (Day 1, Hours 5-8) — 3 parallel worktrees
+### Phase 2: Auth + Agent Core (Day 1, Hours 5-8) — 3 parallel worktrees + infra
 
 **Worktree A (Frontend):**
 - **#9** Google OAuth with refresh tokens (needs #8)
@@ -484,25 +484,33 @@ GOOGLE_CLIENT_SECRET=
 - **#17** Calendar tool integration (needs #16, #10, #59 — blocked until #59 merges)
 - **#18** Prompt injection defense (needs #16)
 
-### Phase 3: Integration (Day 2, Hours 1-4) — 3 parallel worktrees
+**Infra (parallel, no code deps):**
+- **#47** Terraform foundation — resource group, provider, remote state
+
+### Phase 3: Integration (Day 2, Hours 1-4) — 3 parallel worktrees + infra
 
 **Worktree A (Frontend):**
 - **#23** Chat UI with streaming (needs #8, #16)
 - **#24** Calendar view (needs #8, #32)
 
 **Worktree B (Backend):**
-- **#20** Azure AI Search index (needs #12)
-- **#21** Embedding pipeline (needs #20)
-- **#32** GET /api/calendar/events endpoint (needs #12, #10, #59)
+- **#20** Azure AI Search index (needs #12; integration test needs #48)
+- **#21** Embedding pipeline (needs #20; integration test needs #48)
+- **#32** GET /api/calendar/events endpoint (needs #12, #10)
 
 **Worktree C (Agent):**
 - **#22** Search as agent tool (needs #20, #21, #16)
-- **#19** Content Safety guardrails (needs #16, MUST follow #18)
+- **#19** Content Safety guardrails (needs #16, MUST follow #18; integration test needs #48)
+
+**Infra (parallel, only needs #47):**
+- **#48** Terraform module: AI services — OpenAI, AI Search, Content Safety
+- **#49** Terraform module: Azure Cache for Redis
 
 ### Phase 4: Polish + Deploy (Day 2, Hours 5-8)
 - **#15** Background ingestion pipeline (needs #14, #10, #20, #21, #59)
 - **#26** Dockerfiles (needs working frontend + backend)
-- **#27** Terraform modules (needs #26)
+- **#50** Terraform module: Container Apps (needs #47, #26 — only module needing Docker images)
+- **#51** Dev environment root module wiring (needs #48, #49, #50)
 
 ### Cut if behind schedule
 - **#25** Settings page — defer, use env vars

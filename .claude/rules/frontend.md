@@ -68,6 +68,16 @@ paths:
 - Mobile-first: unprefixed utilities are the mobile styles, use `md:`, `lg:` for larger screens
 - Never use arbitrary values (`mt-[13px]`) — use theme values
 - Extract repeated patterns into React components, not `@apply` classes
+- ALWAYS use the `shadcn` skill when adding new UI primitives — never copy-paste or manually create shadcn components
+
+## Available Skills
+
+Use these skills when working on frontend UI stories. Invoke via the Skill tool for best results.
+
+- **`shadcn`** — Adding, composing, or debugging shadcn/ui components. Use instead of manually creating component files
+- **`ui-ux-pro-max`** — Planning page layouts, choosing color palettes, reviewing UI/UX quality. Invoke for design decisions before building
+- **`vercel-react-best-practices`** — Optimizing React/Next.js performance: bundle size, data fetching, rendering strategies, code splitting
+- **`vercel-composition-patterns`** — Designing component architecture: compound components, render props, context providers. Includes React 19 patterns
 
 ## Component Patterns
 
