@@ -168,3 +168,42 @@ module "redis" {
 
   depends_on = [module.key_vault]
 }
+
+# -----------------------------------------------------------------------------
+# Container Apps — Environment + Frontend + Backend
+# -----------------------------------------------------------------------------
+
+module "container_apps" {
+  source = "../../modules/container-apps"
+
+  resource_group_name = azurerm_resource_group.this.name
+  location            = azurerm_resource_group.this.location
+  name_suffix         = local.name_suffix
+  common_tags         = local.common_tags
+
+  # Network
+  container_apps_subnet_id = module.networking.container_apps_subnet_id
+
+  # Identities
+  shared_identity_id           = module.key_vault.identity_id
+  shared_identity_principal_id = module.key_vault.identity_principal_id
+  backend_identity_id          = module.ai_services.backend_identity_id
+  backend_identity_client_id   = module.ai_services.backend_identity_client_id
+
+  # Key Vault secret references
+  redis_connection_string_secret_id = module.redis.redis_connection_string_secret_id
+  fernet_key_secret_id              = azurerm_key_vault_secret.fernet_key.versionless_id
+  google_client_id_secret_id        = azurerm_key_vault_secret.google_client_id.versionless_id
+  google_client_secret_secret_id    = azurerm_key_vault_secret.google_client_secret.versionless_id
+  auth_secret_secret_id             = azurerm_key_vault_secret.auth_secret.versionless_id
+  canary_token_secret_id            = azurerm_key_vault_secret.canary_token.versionless_id
+
+  # AI service endpoints (plain env vars for backend)
+  openai_endpoint              = module.ai_services.openai_endpoint
+  openai_deployment_name       = module.ai_services.openai_deployment_name
+  openai_embed_deployment_name = module.ai_services.openai_embed_deployment_name
+  search_endpoint              = module.ai_services.search_endpoint
+  content_safety_endpoint      = module.ai_services.content_safety_endpoint
+
+  depends_on = [module.key_vault]
+}
