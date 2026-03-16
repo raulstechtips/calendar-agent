@@ -50,6 +50,7 @@ class TestEmbeddingsClientLifecycle:
 
         reset_embeddings_client()
 
+    @patch("app.search.embeddings.settings")
     @patch("app.search.embeddings.AzureOpenAIEmbeddings")
     @patch("app.search.embeddings.get_bearer_token_provider")
     @patch("app.search.embeddings.DefaultAzureCredential")
@@ -58,9 +59,14 @@ class TestEmbeddingsClientLifecycle:
         mock_cred_cls: MagicMock,
         mock_token_provider: MagicMock,
         mock_embeddings_cls: MagicMock,
+        mock_settings: MagicMock,
     ) -> None:
-        from app.core.config import settings
         from app.search.embeddings import get_embeddings_client
+
+        mock_settings.azure_openai_endpoint = "https://test.openai.azure.com"
+        mock_settings.azure_openai_embed_deployment = "text-embedding-3-small"
+        mock_settings.azure_openai_api_version = "2024-10-21"
+        mock_settings.azure_managed_identity_client_id = ""
 
         mock_cred = MagicMock()
         mock_cred_cls.return_value = mock_cred
@@ -75,11 +81,12 @@ class TestEmbeddingsClientLifecycle:
         )
         mock_embeddings_cls.assert_called_once()
         call_kwargs = mock_embeddings_cls.call_args.kwargs
-        assert call_kwargs["azure_endpoint"] == settings.azure_openai_endpoint
-        assert call_kwargs["deployment"] == settings.azure_openai_embed_deployment
-        assert call_kwargs["openai_api_version"] == settings.azure_openai_api_version
+        assert call_kwargs["azure_endpoint"] == "https://test.openai.azure.com"
+        assert call_kwargs["deployment"] == "text-embedding-3-small"
+        assert call_kwargs["openai_api_version"] == "2024-10-21"
         assert client is mock_embeddings_cls.return_value
 
+    @patch("app.search.embeddings.settings")
     @patch("app.search.embeddings.AzureOpenAIEmbeddings")
     @patch("app.search.embeddings.get_bearer_token_provider")
     @patch("app.search.embeddings.DefaultAzureCredential")
@@ -88,9 +95,12 @@ class TestEmbeddingsClientLifecycle:
         mock_cred_cls: MagicMock,
         mock_token_provider: MagicMock,
         mock_embeddings_cls: MagicMock,
+        mock_settings: MagicMock,
     ) -> None:
         from app.search.embeddings import get_embeddings_client
 
+        mock_settings.azure_openai_endpoint = "https://test.openai.azure.com"
+        mock_settings.azure_managed_identity_client_id = ""
         mock_embeddings_cls.return_value = MagicMock()
 
         first = get_embeddings_client()
@@ -99,6 +109,7 @@ class TestEmbeddingsClientLifecycle:
         assert first is second
         mock_embeddings_cls.assert_called_once()
 
+    @patch("app.search.embeddings.settings")
     @patch("app.search.embeddings.AzureOpenAIEmbeddings")
     @patch("app.search.embeddings.get_bearer_token_provider")
     @patch("app.search.embeddings.DefaultAzureCredential")
@@ -107,9 +118,12 @@ class TestEmbeddingsClientLifecycle:
         mock_cred_cls: MagicMock,
         mock_token_provider: MagicMock,
         mock_embeddings_cls: MagicMock,
+        mock_settings: MagicMock,
     ) -> None:
         from app.search.embeddings import close_embeddings_client, get_embeddings_client
 
+        mock_settings.azure_openai_endpoint = "https://test.openai.azure.com"
+        mock_settings.azure_managed_identity_client_id = ""
         mock_cred = MagicMock()
         mock_cred_cls.return_value = mock_cred
         mock_embeddings_cls.return_value = MagicMock()
@@ -127,6 +141,15 @@ class TestEmbeddingsClientLifecycle:
         from app.search.embeddings import close_embeddings_client
 
         close_embeddings_client()
+
+    @patch("app.search.embeddings.settings")
+    def test_should_reject_empty_endpoint(self, mock_settings: MagicMock) -> None:
+        from app.search.embeddings import get_embeddings_client
+
+        mock_settings.azure_openai_endpoint = ""
+
+        with pytest.raises(RuntimeError, match="AZURE_OPENAI_ENDPOINT"):
+            get_embeddings_client()
 
 
 class TestFormatEventText:

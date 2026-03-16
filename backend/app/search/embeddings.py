@@ -7,6 +7,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
+import httpx
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 from langchain_openai import AzureOpenAIEmbeddings
 from openai import (
@@ -29,6 +30,11 @@ def get_embeddings_client() -> AzureOpenAIEmbeddings:
     """Return the singleton AzureOpenAIEmbeddings, creating on first call."""
     global _embeddings_client, _credential
     if _embeddings_client is None:
+        if not settings.azure_openai_endpoint:
+            raise RuntimeError(
+                "AZURE_OPENAI_ENDPOINT is not configured — "
+                "cannot create embeddings client"
+            )
         _credential = DefaultAzureCredential(
             managed_identity_client_id=settings.azure_managed_identity_client_id
             or None,
@@ -164,6 +170,9 @@ async def _embed_with_retry(
         try:
             return await client.aembed_documents(texts)
         except _RETRYABLE_ERRORS as exc:
+            # Don't retry permanent config errors (e.g., missing endpoint URL)
+            if isinstance(exc.__cause__, httpx.UnsupportedProtocol):
+                raise
             if attempt == settings.embedding_max_retries:
                 logger.error(
                     "Batch %d/%d: max retries exhausted for user %s",

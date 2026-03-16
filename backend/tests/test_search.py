@@ -160,37 +160,55 @@ class TestSearchClientLifecycle:
 
         reset_search_client()
 
+    @patch("app.search.service.settings")
     @patch("app.search.service.DefaultAzureCredential")
     @patch("app.search.service.SearchClient")
     def test_get_search_client_returns_search_client(
-        self, mock_client_cls: MagicMock, mock_cred_cls: MagicMock
+        self,
+        mock_client_cls: MagicMock,
+        mock_cred_cls: MagicMock,
+        mock_settings: MagicMock,
     ) -> None:
         from app.search.service import get_search_client
 
+        mock_settings.azure_search_endpoint = "https://test.search.windows.net"
+        mock_settings.azure_managed_identity_client_id = ""
         mock_client_cls.return_value = MagicMock()
         result = get_search_client()
         assert result is mock_client_cls.return_value
 
+    @patch("app.search.service.settings")
     @patch("app.search.service.DefaultAzureCredential")
     @patch("app.search.service.SearchClient")
     def test_get_search_client_returns_same_instance(
-        self, mock_client_cls: MagicMock, mock_cred_cls: MagicMock
+        self,
+        mock_client_cls: MagicMock,
+        mock_cred_cls: MagicMock,
+        mock_settings: MagicMock,
     ) -> None:
         from app.search.service import get_search_client
 
+        mock_settings.azure_search_endpoint = "https://test.search.windows.net"
+        mock_settings.azure_managed_identity_client_id = ""
         mock_client_cls.return_value = MagicMock()
         first = get_search_client()
         second = get_search_client()
         assert first is second
         mock_client_cls.assert_called_once()
 
+    @patch("app.search.service.settings")
     @patch("app.search.service.DefaultAzureCredential")
     @patch("app.search.service.SearchClient")
     async def test_close_search_client_calls_close(
-        self, mock_client_cls: MagicMock, mock_cred_cls: MagicMock
+        self,
+        mock_client_cls: MagicMock,
+        mock_cred_cls: MagicMock,
+        mock_settings: MagicMock,
     ) -> None:
         from app.search.service import close_search_client, get_search_client
 
+        mock_settings.azure_search_endpoint = "https://test.search.windows.net"
+        mock_settings.azure_managed_identity_client_id = ""
         mock_client = AsyncMock()
         mock_client_cls.return_value = mock_client
         mock_cred = AsyncMock()
@@ -202,13 +220,19 @@ class TestSearchClientLifecycle:
         mock_client.close.assert_awaited_once()
         mock_cred.close.assert_awaited_once()
 
+    @patch("app.search.service.settings")
     @patch("app.search.service.DefaultAzureCredential")
     @patch("app.search.service.SearchClient")
     async def test_close_search_client_clears_singleton(
-        self, mock_client_cls: MagicMock, mock_cred_cls: MagicMock
+        self,
+        mock_client_cls: MagicMock,
+        mock_cred_cls: MagicMock,
+        mock_settings: MagicMock,
     ) -> None:
         from app.search.service import close_search_client, get_search_client
 
+        mock_settings.azure_search_endpoint = "https://test.search.windows.net"
+        mock_settings.azure_managed_identity_client_id = ""
         mock_client_cls.return_value = AsyncMock()
         mock_cred_cls.return_value = AsyncMock()
 
@@ -219,6 +243,15 @@ class TestSearchClientLifecycle:
         mock_client_cls.reset_mock()
         get_search_client()
         mock_client_cls.assert_called_once()
+
+    @patch("app.search.service.settings")
+    def test_should_reject_empty_endpoint(self, mock_settings: MagicMock) -> None:
+        from app.search.service import get_search_client
+
+        mock_settings.azure_search_endpoint = ""
+
+        with pytest.raises(RuntimeError, match="AZURE_SEARCH_ENDPOINT"):
+            get_search_client()
 
     async def test_close_search_client_safe_when_no_client(self) -> None:
         from app.search.service import close_search_client

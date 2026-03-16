@@ -23,6 +23,10 @@ def get_search_client() -> SearchClient:
     """Return the singleton async SearchClient, creating on first call."""
     global _search_client, _credential
     if _search_client is None:
+        if not settings.azure_search_endpoint:
+            raise RuntimeError(
+                "AZURE_SEARCH_ENDPOINT is not configured — cannot create search client"
+            )
         _credential = DefaultAzureCredential(
             managed_identity_client_id=settings.azure_managed_identity_client_id
             or None,
