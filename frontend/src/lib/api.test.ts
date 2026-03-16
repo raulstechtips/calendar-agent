@@ -179,3 +179,100 @@ describe("getUserProfile", () => {
     expect((error as InstanceType<typeof ApiError>).status).toBe(401);
   });
 });
+
+describe("getUserPreferences", () => {
+  beforeEach(() => {
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "https://backend.example.com");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it("should return parsed preferences on 200", async () => {
+    const prefs = { timezone: "America/New_York", default_calendar: "primary" };
+    mockedAuth.mockResolvedValue(makeSession());
+    vi.stubGlobal("fetch", mockFetch(prefs));
+
+    const { getUserPreferences } = await import("./api");
+    const result = await getUserPreferences();
+
+    expect(result).toEqual(prefs);
+  });
+
+  it("should throw ApiError on non-ok response", async () => {
+    mockedAuth.mockResolvedValue(makeSession());
+    vi.stubGlobal("fetch", mockFetch({ detail: "Server error" }, 500));
+
+    const { ApiError, getUserPreferences } = await import("./api");
+    const error = await getUserPreferences().catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as InstanceType<typeof ApiError>).status).toBe(500);
+  });
+});
+
+describe("updateUserPreferences", () => {
+  beforeEach(() => {
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "https://backend.example.com");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it("should send PATCH with JSON body", async () => {
+    const updated = { timezone: "Europe/London", default_calendar: "primary" };
+    mockedAuth.mockResolvedValue(makeSession());
+    const fetchMock = mockFetch(updated);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { updateUserPreferences } = await import("./api");
+    const result = await updateUserPreferences({ timezone: "Europe/London" });
+
+    expect(result).toEqual(updated);
+    const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://backend.example.com/api/users/me/preferences");
+    expect(options.method).toBe("PATCH");
+    const headers = options.headers as Record<string, string>;
+    expect(headers["Content-Type"]).toBe("application/json");
+    expect(options.body).toBe(JSON.stringify({ timezone: "Europe/London" }));
+  });
+});
+
+describe("revokeGoogleAccess", () => {
+  beforeEach(() => {
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "https://backend.example.com");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it("should send DELETE and not throw on success", async () => {
+    mockedAuth.mockResolvedValue(makeSession());
+    const fetchMock = mockFetch(null, 204);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { revokeGoogleAccess } = await import("./api");
+    await expect(revokeGoogleAccess()).resolves.toBeUndefined();
+
+    const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://backend.example.com/api/auth/revoke");
+    expect(options.method).toBe("DELETE");
+  });
+
+  it("should throw ApiError on failure", async () => {
+    mockedAuth.mockResolvedValue(makeSession());
+    vi.stubGlobal("fetch", mockFetch({ detail: "No token" }, 404));
+
+    const { ApiError, revokeGoogleAccess } = await import("./api");
+    const error = await revokeGoogleAccess().catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as InstanceType<typeof ApiError>).status).toBe(404);
+  });
+});
