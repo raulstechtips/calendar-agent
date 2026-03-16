@@ -151,6 +151,8 @@ def get_content_safety_client() -> ContentSafetyClient:
 def reset_content_safety_client() -> None:
     """Reset the singleton client (for test isolation)."""
     global _client
+    if _client is not None:
+        _client.close()
     _client = None
 
 
@@ -183,7 +185,10 @@ async def analyze_content_safety(text: str) -> GuardResult:
                 )
         return GuardResult(blocked=False, pattern=None)
     except Exception:
-        logger.warning("Content Safety API error — falling back to regex only")
+        logger.warning(
+            "Content Safety API error — falling back to regex only",
+            exc_info=True,
+        )
         return GuardResult(blocked=False, pattern=None)
 
 
@@ -253,11 +258,10 @@ async def output_guard(state: AgentState) -> dict[str, Any]:
     safety_result = await analyze_content_safety(last_msg.content)
     if safety_result.blocked:
         logger.warning("Output guard blocked: pattern=%s", safety_result.pattern)
-        return {
-            "messages": [
-                RemoveMessage(id=last_msg.id or ""),
-                AIMessage(content=_BLOCKED_OUTPUT_MSG),
-            ],
-        }
+        messages_update: list[AIMessage | RemoveMessage] = []
+        if last_msg.id:
+            messages_update.append(RemoveMessage(id=last_msg.id))
+        messages_update.append(AIMessage(content=_BLOCKED_OUTPUT_MSG))
+        return {"messages": messages_update}
 
     return {}
