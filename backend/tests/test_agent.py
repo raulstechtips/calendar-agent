@@ -86,6 +86,7 @@ class TestAgentState:
             "user_id": "test-user",
             "pending_confirmation": None,
             "remaining_steps": 25,
+            "guardrail_verdict": "",
         }
         assert state["messages"] == []
         assert state["user_id"] == "test-user"
@@ -100,6 +101,7 @@ class TestAgentState:
                 "details": {},
             },
             "remaining_steps": 25,
+            "guardrail_verdict": "",
         }
         confirmation = state["pending_confirmation"]
         assert confirmation is not None
