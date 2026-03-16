@@ -11,6 +11,7 @@ from app.auth.router import router as auth_router
 from app.core.middleware import setup_middleware
 from app.core.redis import close_redis, get_redis
 from app.search.embeddings import close_embeddings_client, get_embeddings_client
+from app.search.index import create_index
 from app.search.service import close_search_client, get_search_client
 from app.users.router import router as users_router
 
@@ -23,6 +24,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     get_redis()
     get_search_client()
     get_embeddings_client()
+    # Ensure search index exists (idempotent — safe on every startup)
+    await create_index()
+    logger.info("Search index ready")
     yield
     # Shutdown: clean up connections (isolate exceptions so both always run)
     try:
