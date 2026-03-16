@@ -15,8 +15,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.agents.calendar_agent import build_thread_id, get_agent
 from app.agents.guardrails import check_canary_leak, check_input
-from app.core.config import settings
 from app.auth.dependencies import get_current_user
+from app.core.config import settings
 from app.users.schemas import UserResponse
 
 logger = logging.getLogger(__name__)

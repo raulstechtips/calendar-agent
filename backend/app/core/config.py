@@ -5,12 +5,14 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    # Azure OpenAI
+    # Azure OpenAI — no API key; uses DefaultAzureCredential
     azure_openai_endpoint: str = ""
-    azure_openai_api_key: str = ""
     azure_openai_deployment: str = "gpt-4o"
     azure_openai_api_version: str = "2024-10-21"
     azure_openai_embed_deployment: str = "text-embedding-3-small"
+
+    # Azure Managed Identity (optional — only needed in prod for User Assigned Identity)
+    azure_managed_identity_client_id: str = ""
 
     # Azure AI Search
     azure_search_endpoint: str = ""

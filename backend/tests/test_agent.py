@@ -32,6 +32,13 @@ from app.users.schemas import UserResponse
 from tests.conftest import TEST_USER_ID
 
 
+class FakeToolChatModel(GenericFakeChatModel):
+    """GenericFakeChatModel that supports bind_tools."""
+
+    def bind_tools(self, tools: Any, **kwargs: Any) -> "FakeToolChatModel":
+        return self
+
+
 class FakeAgent:
     """Mock agent that yields predefined chunks from astream."""
 
@@ -194,7 +201,7 @@ class TestThreadId:
 
 class TestAgentCreation:
     def test_create_agent_with_fake_llm(self) -> None:
-        fake_llm = GenericFakeChatModel(
+        fake_llm = FakeToolChatModel(
             messages=iter([AIMessage(content="Here are your events")])
         )
         agent = create_agent(llm=fake_llm)
@@ -202,7 +209,7 @@ class TestAgentCreation:
         assert hasattr(agent, "astream")
 
     async def test_agent_responds_to_message(self) -> None:
-        fake_llm = GenericFakeChatModel(
+        fake_llm = FakeToolChatModel(
             messages=iter([AIMessage(content="Here are your upcoming events.")])
         )
         agent = create_agent(llm=fake_llm)
