@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -607,3 +608,16 @@ class TestRunIngestion:
 
         # Should not raise — errors are logged and swallowed
         await run_ingestion("user-123")
+
+    @patch("app.context_ingestion.tasks.full_ingest", new_callable=AsyncMock)
+    @patch("app.context_ingestion.tasks.get_sync_metadata", new_callable=AsyncMock)
+    async def test_should_propagate_cancelled_error(
+        self, mock_get_meta: AsyncMock, mock_full: AsyncMock
+    ) -> None:
+        from app.context_ingestion.tasks import run_ingestion
+
+        mock_get_meta.return_value = None
+        mock_full.side_effect = asyncio.CancelledError()
+
+        with pytest.raises(asyncio.CancelledError):
+            await run_ingestion("user-123")

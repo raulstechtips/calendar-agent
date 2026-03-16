@@ -30,9 +30,7 @@ def _parse_datetime(value: str | None) -> datetime | None:
         return None
 
 
-def _compute_recency_factor(
-    timestamp: str | None, last_modified: str | None
-) -> float:
+def _compute_recency_factor(timestamp: str | None, last_modified: str | None) -> float:
     """Compute a recency factor between 0 and 1 using hyperbolic decay.
 
     Uses the more recent of timestamp and last_modified so that

@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import UTC, datetime
 from typing import Any
 
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 from langchain_openai import AzureOpenAIEmbeddings
+from openai import (
+    APIConnectionError,
+    APITimeoutError,
+    InternalServerError,
+    RateLimitError,
+)
 
 from app.core.config import settings
 from app.search.service import delete_documents, upsert_documents
@@ -97,7 +104,11 @@ def format_event_text(event: dict[str, Any]) -> str:
     if description:
         lines.append(f"Description: {description}")
 
-    return "\n".join(lines)
+    text = "\n".join(lines)
+    max_len = settings.embedding_max_text_length
+    if len(text) > max_len:
+        text = text[:max_len]
+    return text
 
 
 def build_search_document(
@@ -119,8 +130,67 @@ def build_search_document(
     }
 
 
+_RETRYABLE_ERRORS = (
+    RateLimitError,
+    APIConnectionError,
+    APITimeoutError,
+    InternalServerError,
+)
+
+
+def _parse_retry_after(exc: BaseException, *, fallback: float) -> float:
+    """Extract Retry-After header from an API error, or return fallback."""
+    import contextlib
+
+    response = getattr(exc, "response", None)
+    if response is not None:
+        header = getattr(response, "headers", {}).get("retry-after")
+        if header is not None:
+            with contextlib.suppress(ValueError, TypeError):
+                return float(header)
+    return fallback
+
+
+async def _embed_with_retry(
+    client: AzureOpenAIEmbeddings,
+    texts: list[str],
+    user_id: str,
+    batch_num: int,
+    total_batches: int,
+) -> list[list[float]]:
+    """Embed texts with exponential backoff retry on transient errors."""
+    delay = settings.embedding_retry_initial_delay
+    for attempt in range(1, settings.embedding_max_retries + 1):
+        try:
+            return await client.aembed_documents(texts)
+        except _RETRYABLE_ERRORS as exc:
+            if attempt == settings.embedding_max_retries:
+                logger.error(
+                    "Batch %d/%d: max retries exhausted for user %s",
+                    batch_num,
+                    total_batches,
+                    user_id,
+                )
+                raise
+            # Respect Retry-After header when present
+            wait = _parse_retry_after(exc, fallback=delay)
+            logger.warning(
+                "Batch %d/%d: %s (attempt %d/%d), retrying in %.1fs for user %s",
+                batch_num,
+                total_batches,
+                type(exc).__name__,
+                attempt,
+                settings.embedding_max_retries,
+                wait,
+                user_id,
+            )
+            await asyncio.sleep(wait)
+            delay *= 2
+    raise RuntimeError("unreachable")
+
+
 async def process_events(user_id: str, events: list[dict[str, Any]]) -> list[str]:
-    """Embed calendar events and upsert to the search index.
+    """Embed calendar events in batches and upsert to the search index.
 
     Handles both creates and updates — upsert semantics overwrite
     existing documents with the same source_id.
@@ -131,16 +201,52 @@ async def process_events(user_id: str, events: list[dict[str, Any]]) -> list[str
     if not events:
         return []
 
-    texts = [format_event_text(event) for event in events]
+    batch_size = settings.embedding_batch_size
     client = get_embeddings_client()
-    embeddings = await client.aembed_documents(texts)
+    all_ids: list[str] = []
+    total_batches = -(-len(events) // batch_size)
 
-    documents = [
-        build_search_document(event, text, embedding)
-        for event, text, embedding in zip(events, texts, embeddings, strict=True)
-    ]
+    for i in range(0, len(events), batch_size):
+        batch_events = events[i : i + batch_size]
+        batch_num = i // batch_size + 1
 
-    return await upsert_documents(user_id, documents)
+        texts = [format_event_text(event) for event in batch_events]
+        embeddings = await _embed_with_retry(
+            client, texts, user_id, batch_num, total_batches
+        )
+
+        documents = [
+            build_search_document(event, text, embedding)
+            for event, text, embedding in zip(
+                batch_events, texts, embeddings, strict=True
+            )
+        ]
+
+        ids = await upsert_documents(user_id, documents)
+        all_ids.extend(ids)
+
+        if len(ids) < len(batch_events):
+            logger.warning(
+                "Batch %d/%d: %d/%d upserts failed for user %s",
+                batch_num,
+                total_batches,
+                len(batch_events) - len(ids),
+                len(batch_events),
+                user_id,
+            )
+
+        logger.info(
+            "Batch %d/%d: embedded %d events for user %s",
+            batch_num,
+            total_batches,
+            len(batch_events),
+            user_id,
+        )
+
+        if batch_num < total_batches:
+            await asyncio.sleep(settings.embedding_batch_delay)
+
+    return all_ids
 
 
 async def delete_events(user_id: str, source_ids: list[str]) -> list[str]:

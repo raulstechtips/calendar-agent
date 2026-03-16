@@ -21,6 +21,13 @@ class Settings(BaseSettings):
     # Azure AI Content Safety — no API key; uses DefaultAzureCredential
     azure_content_safety_endpoint: str = ""
 
+    # Embedding pipeline
+    embedding_batch_size: int = 50
+    embedding_max_retries: int = 3
+    embedding_retry_initial_delay: float = 1.0
+    embedding_batch_delay: float = 1.0
+    embedding_max_text_length: int = 5000
+
     # Redis
     redis_url: str = "redis://localhost:6379/0"
 

@@ -6,6 +6,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from azure.core.exceptions import HttpResponseError, ServiceRequestError
 
 from app.search.index import build_index_schema
 
@@ -525,3 +526,105 @@ class TestDeleteDocuments:
 
         with pytest.raises(ValueError, match="user_id"):
             await delete_documents(user_id="", document_ids=["doc1"])
+
+
+# ---------------------------------------------------------------------------
+# Retry behavior on upsert/delete
+# ---------------------------------------------------------------------------
+
+
+def _make_http_response_error(status_code: int = 429) -> HttpResponseError:
+    """Build an Azure HttpResponseError for testing."""
+    error = HttpResponseError(message=f"HTTP {status_code}")
+    error.status_code = status_code
+    return error
+
+
+class TestUpsertDocumentsRetry:
+    @pytest.fixture(autouse=True)
+    def _reset(self) -> None:
+        from app.search.service import reset_search_client
+
+        reset_search_client()
+
+    @patch("app.search.service.get_search_client")
+    @patch("asyncio.sleep", new_callable=AsyncMock)
+    @patch("app.search.service.settings")
+    async def test_should_retry_upsert_on_transient_error(
+        self,
+        mock_settings: MagicMock,
+        mock_sleep: AsyncMock,
+        mock_get_client: MagicMock,
+    ) -> None:
+        from app.search.service import upsert_documents
+
+        mock_settings.embedding_max_retries = 3
+        mock_settings.embedding_retry_initial_delay = 1.0
+
+        mock_result = MagicMock(succeeded=True, key="doc1")
+        mock_client = AsyncMock()
+        mock_client.merge_or_upload_documents = AsyncMock(
+            side_effect=[_make_http_response_error(429), [mock_result]]
+        )
+        mock_get_client.return_value = mock_client
+
+        result = await upsert_documents(
+            user_id="user-123", documents=[{"id": "doc1", "content": "test"}]
+        )
+
+        assert result == ["doc1"]
+        assert mock_client.merge_or_upload_documents.await_count == 2
+
+    @patch("app.search.service.get_search_client")
+    @patch("asyncio.sleep", new_callable=AsyncMock)
+    @patch("app.search.service.settings")
+    async def test_should_raise_upsert_after_max_retries(
+        self,
+        mock_settings: MagicMock,
+        mock_sleep: AsyncMock,
+        mock_get_client: MagicMock,
+    ) -> None:
+        from app.search.service import upsert_documents
+
+        mock_settings.embedding_max_retries = 3
+        mock_settings.embedding_retry_initial_delay = 1.0
+
+        mock_client = AsyncMock()
+        mock_client.merge_or_upload_documents = AsyncMock(
+            side_effect=_make_http_response_error(429)
+        )
+        mock_get_client.return_value = mock_client
+
+        with pytest.raises(HttpResponseError):
+            await upsert_documents(
+                user_id="user-123", documents=[{"id": "doc1", "content": "test"}]
+            )
+
+        assert mock_client.merge_or_upload_documents.await_count == 3
+
+    @patch("app.search.service.get_search_client")
+    @patch("asyncio.sleep", new_callable=AsyncMock)
+    @patch("app.search.service.settings")
+    async def test_should_retry_on_service_request_error(
+        self,
+        mock_settings: MagicMock,
+        mock_sleep: AsyncMock,
+        mock_get_client: MagicMock,
+    ) -> None:
+        from app.search.service import upsert_documents
+
+        mock_settings.embedding_max_retries = 3
+        mock_settings.embedding_retry_initial_delay = 1.0
+
+        mock_result = MagicMock(succeeded=True, key="doc1")
+        mock_client = AsyncMock()
+        mock_client.merge_or_upload_documents = AsyncMock(
+            side_effect=[ServiceRequestError("connection reset"), [mock_result]]
+        )
+        mock_get_client.return_value = mock_client
+
+        result = await upsert_documents(
+            user_id="user-123", documents=[{"id": "doc1", "content": "test"}]
+        )
+
+        assert result == ["doc1"]
