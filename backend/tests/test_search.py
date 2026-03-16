@@ -353,6 +353,38 @@ class TestSearch:
             await search(user_id="", query_text="meeting")
 
     @patch("app.search.service.get_search_client")
+    async def test_should_escape_odata_special_chars_in_user_id(
+        self, mock_get_client: MagicMock
+    ) -> None:
+        from app.search.service import search
+
+        mock_client = self._setup_mock_client()
+        mock_get_client.return_value = mock_client
+
+        await search(user_id="user'inject", query_text="test")
+
+        call_kwargs = mock_client.search.call_args.kwargs
+        assert "user''inject" in call_kwargs["filter"]
+
+    @patch("app.search.service.get_search_client")
+    async def test_should_escape_odata_special_chars_in_source_type(
+        self, mock_get_client: MagicMock
+    ) -> None:
+        from app.search.service import search
+
+        mock_client = self._setup_mock_client()
+        mock_get_client.return_value = mock_client
+
+        await search(
+            user_id="user-123",
+            query_text="test",
+            source_type="type'bad",
+        )
+
+        call_kwargs = mock_client.search.call_args.kwargs
+        assert "type''bad" in call_kwargs["filter"]
+
+    @patch("app.search.service.get_search_client")
     async def test_should_respect_top_parameter(
         self, mock_get_client: MagicMock
     ) -> None:
@@ -393,6 +425,8 @@ class TestUpsertDocuments:
         call_args = mock_client.merge_or_upload_documents.call_args
         uploaded_docs = call_args.args[0]
         assert uploaded_docs[0]["user_id"] == "real-user"
+        # Original dict should not be mutated
+        assert docs[0]["user_id"] == "attacker-id"
 
     @patch("app.search.service.get_search_client")
     async def test_should_call_merge_or_upload_documents(

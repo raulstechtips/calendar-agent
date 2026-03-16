@@ -57,6 +57,11 @@ def _validate_user_id(user_id: str) -> None:
         raise ValueError("user_id must not be empty")
 
 
+def _escape_odata_string(value: str) -> str:
+    """Escape single quotes for OData filter strings."""
+    return value.replace("'", "''")
+
+
 async def search(
     user_id: str,
     query_text: str,
@@ -75,9 +80,11 @@ async def search(
     """
     _validate_user_id(user_id)
 
-    filter_expression = f"user_id eq '{user_id}'"
+    filter_expression = f"user_id eq '{_escape_odata_string(user_id)}'"
     if source_type:
-        filter_expression += f" and source_type eq '{source_type}'"
+        filter_expression += (
+            f" and source_type eq '{_escape_odata_string(source_type)}'"
+        )
 
     vector_queries: list[VectorQuery] | None = None
     if query_vector is not None:
@@ -114,11 +121,10 @@ async def upsert_documents(user_id: str, documents: list[dict[str, Any]]) -> lis
     """
     _validate_user_id(user_id)
 
-    for doc in documents:
-        doc["user_id"] = user_id
+    docs_with_user = [{**doc, "user_id": user_id} for doc in documents]
 
     client = get_search_client()
-    results = await client.merge_or_upload_documents(documents)
+    results = await client.merge_or_upload_documents(docs_with_user)
     return [r.key for r in results if r.succeeded and r.key is not None]
 
 

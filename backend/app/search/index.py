@@ -90,9 +90,12 @@ async def create_index() -> SearchIndex:
     credential = DefaultAzureCredential(
         managed_identity_client_id=settings.azure_managed_identity_client_id or None,
     )
-    async with SearchIndexClient(
-        endpoint=settings.azure_search_endpoint,
-        credential=credential,
-    ) as client:
-        index = build_index_schema()
-        return await client.create_or_update_index(index)
+    try:
+        async with SearchIndexClient(
+            endpoint=settings.azure_search_endpoint,
+            credential=credential,
+        ) as client:
+            index = build_index_schema()
+            return await client.create_or_update_index(index)
+    finally:
+        await credential.close()
