@@ -191,3 +191,132 @@ Key details:
 - Frequent 429 retries visible in batch progress logs (e.g., `"retrying in 30.0s"`)
 - User complaints about slow first-login experience
 - TPM quota increase is not an option (cost or policy constraint)
+
+---
+
+## 4. Embedding Cost & TPM Scaling — Redis as Sync Token Store
+
+**Date:** 2026-03-16
+**Issue:** #92 (Embedding Pipeline Batching)
+**Files:** `backend/app/context_ingestion/sync.py`, `backend/app/search/embeddings.py`
+
+### Baseline numbers (real measurement)
+
+Single user calendar: **162 events, 143.73K tokens, ~4 batches of 50**
+
+- Average tokens per event: ~887
+- Embedding model: `text-embedding-3-small` ($0.02 / 1M tokens)
+- Cost per full ingest: **$0.0029**
+
+### Cost at scale
+
+| Users | Full ingest tokens | Cost | Notes |
+|-------|--------------------|------|-------|
+| 1 | 143.73K | $0.003 | Your calendar |
+| 10 | 1.44M | $0.03 | Small team |
+| 100 | 14.4M | $0.29 | Department |
+| 1,000 | 144M | $2.88 | Organization |
+
+Embeddings are cheap. **The real constraint is TPM (tokens per minute)**, not dollars.
+
+### TPM bottleneck
+
+Azure OpenAI enforces TPM quotas per deployment:
+
+| Tier | TPM limit | Full ingests/min (at 144K tokens each) |
+|------|-----------|----------------------------------------|
+| S0 default | 240K | 1.6 users |
+| S0 increased | 1M | 6.9 users |
+| Provisioned | 10M | 69 users |
+
+Delta sync (typically ~5 changed events, ~4.4K tokens) is **~33x cheaper** than full ingest per login. The sync token in Redis is what enables delta sync — losing it forces a full re-ingest.
+
+### What we built (MVP)
+
+Sync tokens live in Redis only. If Redis data is lost:
+
+1. `get_sync_metadata()` returns `None` for every user
+2. Every login triggers `full_ingest()` instead of `delta_sync()`
+3. All users compete for the same TPM quota simultaneously
+
+### The re-ingest storm
+
+If Redis dies and N users log in:
+
+| Users | Tokens needed | Time at 240K TPM | Time at 1M TPM | Time at 10M TPM |
+|-------|---------------|-------------------|-----------------|-----------------|
+| 10 | 1.44M | 6 min | 1.4 min | 9 sec |
+| 100 | 14.4M | 60 min | 14.4 min | 1.4 min |
+| 1,000 | 144M | 10 hours | 2.4 hours | 14.4 min |
+
+With batching + exponential backoff, this degrades gracefully (no crashes, just slow). Each user takes 6-8 seconds without rate limits, 30-120 seconds with backoff retries.
+
+### Why this is sufficient for now
+
+- Azure Cache for Redis (managed) has 99.9% SLA — full data loss is rare
+- At MVP scale (1-10 users), a re-ingest storm is 1.44M tokens / ~$0.03 / ~6 minutes
+- The metadata-before-ingest fix (#92) prevents the worst case: a partial embedding failure no longer triggers infinite full re-ingest loops on every login attempt
+- Delta sync reduces the steady-state cost to near-zero (~5 events per login)
+
+### When this breaks
+
+- **10+ concurrent users** after Redis loss: 240K TPM is exhausted by user #2, cascading 429 retries for the rest
+- **100+ users**: recovery takes over an hour at default TPM, login experience is degraded for everyone
+- **Multi-replica deployments**: each replica independently triggers ingestion, multiplying TPM consumption
+
+### The upgrade path — Durable sync token storage
+
+Move sync tokens from Redis-only to a durable store so Redis loss doesn't trigger mass re-ingestion:
+
+**Option A: Metadata document in Azure AI Search**
+
+Store the sync token as a document in the search index itself (already durable, already available):
+
+```python
+# On sync completion
+await upsert_documents(user_id, [{
+    "id": f"sync_meta:{user_id}",
+    "user_id": user_id,
+    "source_type": "sync_metadata",
+    "content": "",
+    "embedding": [0.0] * 1536,  # zero vector (not searchable)
+    "sync_token": sync_token,
+    "last_modified": datetime.now(UTC).isoformat(),
+}])
+```
+
+Recovery flow: Redis miss → query search index for metadata doc → found → delta sync.
+
+**Option B: Recover from search index `last_modified`**
+
+If the user has documents in the index, use the most recent `last_modified` timestamp with Google Calendar's `updatedMin` parameter to fetch only changes since the last upsert and obtain a fresh sync token:
+
+```python
+# Redis miss, but user has indexed documents
+latest_doc = await search(user_id, query="*", order_by=["last_modified desc"], top=1)
+if latest_doc:
+    updated_min = latest_doc["last_modified"]  # minus safety margin
+    events, sync_token = await fetch_events(updatedMin=updated_min)
+    # Process only the delta, store fresh sync token
+```
+
+Caveats: `updatedMin` can't combine with `timeMin`/`timeMax`, so this returns changes across the entire calendar history. Also requires subtracting a safety margin since our `last_modified` is upsert time, not Google's modification time.
+
+**Option C: PostgreSQL (when added for other reasons)**
+
+If the architecture adds Postgres for user profiles or other durable state, sync tokens naturally belong there alongside other per-user metadata.
+
+### Scaling strategy summary
+
+| Scale | Strategy | Monthly cost | TPM needed |
+|-------|----------|--------------|------------|
+| 1-10 users | Current design (Redis-only sync tokens) | ~$0 | 240K (default) |
+| 10-100 users | Ingestion queue + sync token recovery from search index | $1-3 | 1M |
+| 100-1,000 users | Priority queue (delta before full ingest) + provisioned throughput | $3-30 | 10M+ |
+| 1,000+ users | Dedicated embedding deployment per region, async job queue, durable sync token store | $30+ | Multi-deployment |
+
+### Trigger to upgrade
+
+- Redis failover event causes visible re-ingest storm (mass `"Starting full ingest"` logs)
+- Scaling beyond 10 active users
+- Moving to multi-replica deployment where Redis persistence becomes critical
