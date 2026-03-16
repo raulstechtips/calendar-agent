@@ -50,3 +50,30 @@ variable "content_safety_sku" {
     error_message = "Content Safety SKU must be \"F0\" or \"S0\"."
   }
 }
+
+# --- Network hardening ---
+
+variable "private_endpoints_subnet_id" {
+  description = "Resource ID of the Private Endpoints subnet"
+  type        = string
+}
+
+variable "openai_dns_zone_id" {
+  description = "Resource ID of the privatelink.openai.azure.com DNS zone"
+  type        = string
+}
+
+variable "search_dns_zone_id" {
+  description = "Resource ID of the privatelink.search.windows.net DNS zone"
+  type        = string
+}
+
+variable "content_safety_dns_zone_id" {
+  description = "Resource ID of the privatelink.cognitiveservices.azure.com DNS zone"
+  type        = string
+}
+
+variable "deployer_ip_cidrs" {
+  description = "List of CIDR strings allowed through service firewalls (Terraform deployer IPs)"
+  type        = list(string)
+}

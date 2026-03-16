@@ -11,6 +11,11 @@ resource "azurerm_cognitive_account" "openai" {
   custom_subdomain_name = "openai-${var.name_suffix}"
   local_auth_enabled    = false
 
+  network_acls {
+    default_action = "Deny"
+    ip_rules       = var.deployer_ip_cidrs
+  }
+
   tags = var.common_tags
 }
 
@@ -51,12 +56,14 @@ resource "azurerm_cognitive_deployment" "text_embedding_3_small" {
 # -----------------------------------------------------------------------------
 
 resource "azurerm_search_service" "this" {
-  name                         = "search-${var.name_suffix}"
-  resource_group_name          = var.resource_group_name
-  location                     = var.location
-  sku                          = var.search_sku
-  local_authentication_enabled = false
-  authentication_failure_mode  = "http403"
+  name                          = "search-${var.name_suffix}"
+  resource_group_name           = var.resource_group_name
+  location                      = var.location
+  sku                           = var.search_sku
+  local_authentication_enabled  = false
+  authentication_failure_mode   = "http403"
+  public_network_access_enabled = false
+  allowed_ips                   = var.deployer_ip_cidrs
 
   tags = var.common_tags
 }
@@ -73,6 +80,11 @@ resource "azurerm_cognitive_account" "content_safety" {
   sku_name              = var.content_safety_sku
   custom_subdomain_name = "contentsafety-${var.name_suffix}"
   local_auth_enabled    = false
+
+  network_acls {
+    default_action = "Deny"
+    ip_rules       = var.deployer_ip_cidrs
+  }
 
   tags = var.common_tags
 }
@@ -109,4 +121,71 @@ resource "azurerm_role_assignment" "backend_content_safety" {
   scope                = azurerm_cognitive_account.content_safety.id
   role_definition_name = "Cognitive Services User"
   principal_id         = azurerm_user_assigned_identity.backend.principal_id
+}
+
+# -----------------------------------------------------------------------------
+# Private Endpoints
+# -----------------------------------------------------------------------------
+
+resource "azurerm_private_endpoint" "openai" {
+  name                = "pe-openai-${var.name_suffix}"
+  resource_group_name = var.resource_group_name
+  location            = var.location
+  subnet_id           = var.private_endpoints_subnet_id
+
+  private_service_connection {
+    name                           = "psc-openai-${var.name_suffix}"
+    private_connection_resource_id = azurerm_cognitive_account.openai.id
+    is_manual_connection           = false
+    subresource_names              = ["account"]
+  }
+
+  private_dns_zone_group {
+    name                 = "default"
+    private_dns_zone_ids = [var.openai_dns_zone_id]
+  }
+
+  tags = var.common_tags
+}
+
+resource "azurerm_private_endpoint" "search" {
+  name                = "pe-search-${var.name_suffix}"
+  resource_group_name = var.resource_group_name
+  location            = var.location
+  subnet_id           = var.private_endpoints_subnet_id
+
+  private_service_connection {
+    name                           = "psc-search-${var.name_suffix}"
+    private_connection_resource_id = azurerm_search_service.this.id
+    is_manual_connection           = false
+    subresource_names              = ["searchService"]
+  }
+
+  private_dns_zone_group {
+    name                 = "default"
+    private_dns_zone_ids = [var.search_dns_zone_id]
+  }
+
+  tags = var.common_tags
+}
+
+resource "azurerm_private_endpoint" "content_safety" {
+  name                = "pe-contentsafety-${var.name_suffix}"
+  resource_group_name = var.resource_group_name
+  location            = var.location
+  subnet_id           = var.private_endpoints_subnet_id
+
+  private_service_connection {
+    name                           = "psc-contentsafety-${var.name_suffix}"
+    private_connection_resource_id = azurerm_cognitive_account.content_safety.id
+    is_manual_connection           = false
+    subresource_names              = ["account"]
+  }
+
+  private_dns_zone_group {
+    name                 = "default"
+    private_dns_zone_ids = [var.content_safety_dns_zone_id]
+  }
+
+  tags = var.common_tags
 }
