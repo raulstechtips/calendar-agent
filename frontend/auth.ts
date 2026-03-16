@@ -6,6 +6,7 @@
 import NextAuth, { type DefaultSession } from "next-auth";
 import Google from "next-auth/providers/google";
 import { refreshAccessToken } from "./src/lib/google-auth";
+import { syncTokenToBackend } from "./src/lib/token-sync";
 
 declare module "next-auth" {
   interface Session {
@@ -50,7 +51,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async jwt({ token, account }) {
       // Initial sign-in: capture tokens from Google OAuth response
       if (account) {
-        return {
+        const updatedToken = {
           ...token,
           accessToken: account.access_token,
           idToken: account.id_token,
@@ -59,6 +60,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           scope: account.scope,
           error: undefined,
         };
+        // Fire-and-forget sync to backend Redis
+        syncTokenToBackend(updatedToken).catch(() => {});
+        return updatedToken;
       }
 
       // Token still valid (with 60-second buffer): return as-is
@@ -71,7 +75,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
       // Token expired: refresh via Google's token endpoint.
       // Concurrent expired-token requests each refresh independently — Google tolerates this.
-      return refreshAccessToken(token);
+      const refreshed = await refreshAccessToken(token);
+      if (!refreshed.error) {
+        syncTokenToBackend(refreshed).catch(() => {});
+      }
+      return refreshed;
     },
     session({ session, token }) {
       if (token.sub) {
