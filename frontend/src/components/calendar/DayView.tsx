@@ -1,16 +1,21 @@
 "use client";
 
-import { getEventPosition, type CalendarEvent } from "@/lib/calendar";
+import {
+  clipToDay,
+  getEventPosition,
+  type CalendarEvent,
+} from "@/lib/calendar";
 
 import EventCard from "./EventCard";
 import TimeGrid, { HOUR_HEIGHT } from "./TimeGrid";
 
 interface DayViewProps {
   events: CalendarEvent[];
+  date: Date;
   onEventClick: (event: CalendarEvent) => void;
 }
 
-export default function DayView({ events, onEventClick }: DayViewProps) {
+export default function DayView({ events, date, onEventClick }: DayViewProps) {
   const allDayEvents = events.filter((e) => e.isAllDay);
   const timedEvents = events.filter((e) => !e.isAllDay);
 
@@ -35,9 +40,14 @@ export default function DayView({ events, onEventClick }: DayViewProps) {
       <TimeGrid columns={1}>
         <div className="absolute inset-0">
           {timedEvents.map((event) => {
-            const { top, height } = getEventPosition(
+            const { clippedStart, clippedEnd } = clipToDay(
               event.start,
               event.end,
+              date,
+            );
+            const { top, height } = getEventPosition(
+              clippedStart,
+              clippedEnd,
               HOUR_HEIGHT,
             );
             return (

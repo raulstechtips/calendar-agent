@@ -2,8 +2,10 @@
 
 import {
   addDays,
+  clipToDay,
   getEventPosition,
   isSameDay,
+  overlapsDay,
   type CalendarEvent,
 } from "@/lib/calendar";
 import { cn } from "@/lib/utils";
@@ -73,7 +75,7 @@ export default function WeekView({
           >
             {days.map((day, i) => {
               const dayAllDay = allDayEvents.filter((e) =>
-                isSameDay(new Date(e.start), day),
+                overlapsDay(e.start, e.end, day),
               );
               return (
                 <div key={i} className="flex flex-col gap-0.5">
@@ -99,14 +101,19 @@ export default function WeekView({
         >
           {days.map((day, i) => {
             const dayEvents = timedEvents.filter((e) =>
-              isSameDay(new Date(e.start), day),
+              overlapsDay(e.start, e.end, day),
             );
             return (
               <div key={i} className="relative">
                 {dayEvents.map((event) => {
-                  const { top, height } = getEventPosition(
+                  const { clippedStart, clippedEnd } = clipToDay(
                     event.start,
                     event.end,
+                    day,
+                  );
+                  const { top, height } = getEventPosition(
+                    clippedStart,
+                    clippedEnd,
                     HOUR_HEIGHT,
                   );
                   return (

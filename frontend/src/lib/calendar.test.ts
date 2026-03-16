@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   addDays,
+  clipToDay,
   fetchCalendarEvents,
   formatDateLabel,
   formatISODate,
@@ -9,6 +10,7 @@ import {
   getEventPosition,
   getWeekRange,
   isSameDay,
+  overlapsDay,
   parseDate,
   type CalendarEvent,
 } from "./calendar";
@@ -64,6 +66,63 @@ describe("getDayRange", () => {
   });
 });
 
+describe("overlapsDay", () => {
+  it("should detect event on the same day", () => {
+    expect(
+      overlapsDay("2026-03-16T10:00:00Z", "2026-03-16T11:00:00Z", new Date(2026, 2, 16)),
+    ).toBe(true);
+  });
+
+  it("should detect multi-day event on continuation day", () => {
+    // Event spans Mon-Wed, check Tuesday
+    expect(
+      overlapsDay("2026-03-16", "2026-03-19", new Date(2026, 2, 17)),
+    ).toBe(true);
+  });
+
+  it("should detect cross-midnight event on next day", () => {
+    // Use local-time strings to match getDayRange(new Date(2026, 2, 17))
+    expect(
+      overlapsDay("2026-03-16T23:00:00", "2026-03-17T01:00:00", new Date(2026, 2, 17)),
+    ).toBe(true);
+  });
+
+  it("should not detect event on a non-overlapping day", () => {
+    expect(
+      overlapsDay("2026-03-16T10:00:00Z", "2026-03-16T11:00:00Z", new Date(2026, 2, 17)),
+    ).toBe(false);
+  });
+});
+
+describe("clipToDay", () => {
+  it("should not clip an event fully within the day", () => {
+    const { clippedStart, clippedEnd } = clipToDay(
+      "2026-03-16T10:00:00Z",
+      "2026-03-16T11:00:00Z",
+      new Date(2026, 2, 16),
+    );
+    expect(new Date(clippedStart).getHours()).toBe(
+      new Date("2026-03-16T10:00:00Z").getHours(),
+    );
+    expect(new Date(clippedEnd).getHours()).toBe(
+      new Date("2026-03-16T11:00:00Z").getHours(),
+    );
+  });
+
+  it("should clip a cross-midnight event to end of day", () => {
+    const day = new Date(2026, 2, 16);
+    const { clippedEnd } = clipToDay(
+      "2026-03-16T23:00:00-04:00",
+      "2026-03-17T01:00:00-04:00",
+      day,
+    );
+    const end = new Date(clippedEnd);
+    // Clipped end should be midnight of March 17 (= end of March 16)
+    expect(end.getDate()).toBe(17);
+    expect(end.getHours()).toBe(0);
+  });
+});
+
 describe("getWeekRange", () => {
   it("should return Monday to next Monday", () => {
     // March 16, 2026 is a Monday
@@ -106,6 +165,14 @@ describe("formatDateLabel", () => {
     const label = formatDateLabel(date, "week");
     expect(label).toContain("16");
     expect(label).toContain("22");
+  });
+
+  it("should include both years for cross-year week", () => {
+    // Dec 29, 2025 is a Monday; week spans Dec 29, 2025 – Jan 4, 2026
+    const date = new Date(2025, 11, 29);
+    const label = formatDateLabel(date, "week");
+    expect(label).toContain("2025");
+    expect(label).toContain("2026");
   });
 });
 
@@ -414,5 +481,53 @@ describe("fetchCalendarEvents", () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error).toBe("api_error");
+  });
+
+  it("should paginate when nextPageToken is present", async () => {
+    const page1 = {
+      items: [{ id: "e1", summary: "Event 1", start: { dateTime: "2026-03-16T10:00:00Z" }, end: { dateTime: "2026-03-16T11:00:00Z" } }],
+      nextPageToken: "token123",
+    };
+    const page2 = {
+      items: [{ id: "e2", summary: "Event 2", start: { dateTime: "2026-03-16T14:00:00Z" }, end: { dateTime: "2026-03-16T15:00:00Z" } }],
+    };
+
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(new Response(JSON.stringify(page1), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(page2), { status: 200 }));
+
+    const result = await fetchCalendarEvents(mockAccessToken, timeMin, timeMax);
+
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.events).toHaveLength(2);
+    expect(result.events[0]?.summary).toBe("Event 1");
+    expect(result.events[1]?.summary).toBe("Event 2");
+
+    // Verify second call includes pageToken
+    const secondUrl = vi.mocked(fetch).mock.calls[1]?.[0] as URL;
+    expect(secondUrl.searchParams.get("pageToken")).toBe("token123");
+  });
+
+  it("should return api_error for rate-limited 403", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: {
+            code: 403,
+            errors: [{ domain: "usageLimits", reason: "rateLimitExceeded" }],
+          },
+        }),
+        { status: 403 },
+      ),
+    );
+
+    const result = await fetchCalendarEvents(mockAccessToken, timeMin, timeMax);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toBe("api_error");
+    expect(result.message).toContain("Too many requests");
   });
 });

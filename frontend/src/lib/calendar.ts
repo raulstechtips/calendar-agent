@@ -67,6 +67,7 @@ interface GoogleEvent {
 
 interface GoogleEventsResponse {
   items?: GoogleEvent[];
+  nextPageToken?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -91,39 +92,59 @@ export async function fetchCalendarEvents(
   url.searchParams.set("maxResults", "250");
 
   try {
-    const response = await fetch(url, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-      signal,
-    });
+    const allEvents: CalendarEvent[] = [];
+    let pageToken: string | undefined;
 
-    if (response.status === 403) {
-      return {
-        ok: false,
-        error: "scope_required",
-        message:
-          "Calendar access not granted. Please grant calendar permissions.",
-      };
-    }
+    do {
+      const pageUrl = new URL(url.toString());
+      if (pageToken) {
+        pageUrl.searchParams.set("pageToken", pageToken);
+      }
 
-    if (response.status === 401) {
-      return {
-        ok: false,
-        error: "auth_error",
-        message: "Authentication expired. Please sign in again.",
-      };
-    }
+      const response = await fetch(pageUrl, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        signal,
+      });
 
-    if (!response.ok) {
-      return {
-        ok: false,
-        error: "api_error",
-        message: `Google Calendar API error: ${response.status}`,
-      };
-    }
+      if (response.status === 403) {
+        const reason = await parse403Reason(response);
+        if (reason === "rateLimited") {
+          return {
+            ok: false,
+            error: "api_error",
+            message: "Too many requests. Please try again shortly.",
+          };
+        }
+        return {
+          ok: false,
+          error: "scope_required",
+          message:
+            "Calendar access not granted. Please grant calendar permissions.",
+        };
+      }
 
-    const data = (await response.json()) as GoogleEventsResponse;
-    const events = (data.items ?? []).map(mapGoogleEvent);
-    return { ok: true, events };
+      if (response.status === 401) {
+        return {
+          ok: false,
+          error: "auth_error",
+          message: "Authentication expired. Please sign in again.",
+        };
+      }
+
+      if (!response.ok) {
+        return {
+          ok: false,
+          error: "api_error",
+          message: `Google Calendar API error: ${response.status}`,
+        };
+      }
+
+      const data = (await response.json()) as GoogleEventsResponse;
+      allEvents.push(...(data.items ?? []).map(mapGoogleEvent));
+      pageToken = data.nextPageToken;
+    } while (pageToken);
+
+    return { ok: true, events: allEvents };
   } catch {
     return {
       ok: false,
@@ -163,6 +184,21 @@ function mapGoogleEvent(event: GoogleEvent): CalendarEvent {
   };
 }
 
+async function parse403Reason(
+  response: Response,
+): Promise<"rateLimited" | "insufficientScope"> {
+  try {
+    const body = (await response.json()) as {
+      error?: { errors?: Array<{ domain?: string; reason?: string }> };
+    };
+    const domain = body.error?.errors?.[0]?.domain;
+    if (domain === "usageLimits") return "rateLimited";
+  } catch {
+    // Parse failure — fall through to default
+  }
+  return "insufficientScope";
+}
+
 // ---------------------------------------------------------------------------
 // Date helpers
 // ---------------------------------------------------------------------------
@@ -181,6 +217,35 @@ export function isSameDay(a: Date, b: Date): boolean {
     a.getMonth() === b.getMonth() &&
     a.getDate() === b.getDate()
   );
+}
+
+/** Check if an event overlaps with a given day. */
+export function overlapsDay(
+  eventStartISO: string,
+  eventEndISO: string,
+  day: Date,
+): boolean {
+  const { start: dayStart, end: dayEnd } = getDayRange(day);
+  const eventStart = new Date(eventStartISO);
+  const eventEnd = new Date(eventEndISO);
+  return eventStart < dayEnd && eventEnd > dayStart;
+}
+
+/** Clip an event's start/end to a day's bounds (for cross-midnight rendering). */
+export function clipToDay(
+  eventStartISO: string,
+  eventEndISO: string,
+  day: Date,
+): { clippedStart: string; clippedEnd: string } {
+  const { start: dayStart, end: dayEnd } = getDayRange(day);
+  const eventStart = new Date(eventStartISO);
+  const eventEnd = new Date(eventEndISO);
+  const clippedStart = new Date(Math.max(eventStart.getTime(), dayStart.getTime()));
+  const clippedEnd = new Date(Math.min(eventEnd.getTime(), dayEnd.getTime()));
+  return {
+    clippedStart: clippedStart.toISOString(),
+    clippedEnd: clippedEnd.toISOString(),
+  };
 }
 
 /** Get start (midnight) and end (next midnight) for a given day. */
@@ -228,7 +293,7 @@ export function formatDateLabel(date: Date, view: CalendarViewType): string {
     return `${month} ${start.getDate()} – ${sunday.getDate()}, ${start.getFullYear()}`;
   }
 
-  // Cross-month: "Mar 30 – Apr 5, 2026"
+  // Cross-month: "Mar 30 – Apr 5, 2026" or cross-year: "Dec 29, 2025 – Jan 4, 2026"
   const startStr = start.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
@@ -237,6 +302,9 @@ export function formatDateLabel(date: Date, view: CalendarViewType): string {
     month: "short",
     day: "numeric",
   });
+  if (start.getFullYear() !== sunday.getFullYear()) {
+    return `${startStr}, ${start.getFullYear()} – ${endStr}, ${sunday.getFullYear()}`;
+  }
   return `${startStr} – ${endStr}, ${sunday.getFullYear()}`;
 }
 

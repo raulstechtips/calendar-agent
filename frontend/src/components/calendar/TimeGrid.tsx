@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -31,7 +31,11 @@ export default function TimeGrid({ children, columns }: TimeGridProps) {
     }
   }, []);
 
-  const now = new Date();
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(new Date()), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
   const currentTimeTop = (currentMinutes / 60) * HOUR_HEIGHT;
 
