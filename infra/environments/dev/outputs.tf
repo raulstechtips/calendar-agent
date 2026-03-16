@@ -23,6 +23,28 @@ output "common_tags" {
   value       = local.common_tags
 }
 
+# --- Networking ---
+
+output "vnet_id" {
+  description = "Resource ID of the virtual network"
+  value       = module.networking.vnet_id
+}
+
+output "container_apps_subnet_id" {
+  description = "Resource ID of the Container Apps Environment subnet"
+  value       = module.networking.container_apps_subnet_id
+}
+
+output "private_endpoints_subnet_id" {
+  description = "Resource ID of the Private Endpoints subnet"
+  value       = module.networking.private_endpoints_subnet_id
+}
+
+output "dns_zone_ids" {
+  description = "Map of service key to Private DNS zone resource ID"
+  value       = module.networking.dns_zone_ids
+}
+
 # AI Services outputs
 
 output "openai_endpoint" {

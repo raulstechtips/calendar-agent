@@ -50,3 +50,20 @@ variable "sku_name" {
     error_message = "sku_name must be \"standard\" or \"premium\"."
   }
 }
+
+# --- Network hardening ---
+
+variable "private_endpoints_subnet_id" {
+  description = "Resource ID of the Private Endpoints subnet"
+  type        = string
+}
+
+variable "key_vault_dns_zone_id" {
+  description = "Resource ID of the privatelink.vaultcore.azure.net DNS zone"
+  type        = string
+}
+
+variable "deployer_ip_cidrs" {
+  description = "List of CIDR strings allowed through the Key Vault firewall (Terraform deployer IPs)"
+  type        = list(string)
+}
