@@ -26,7 +26,7 @@ class Settings(BaseSettings):
 
     # Security
     fernet_key: str = ""
-    cors_origins: list[str] = ["http://localhost:3000"]
+    cors_origins: list[str] | str = ["http://localhost:3000"]
     canary_token: str = ""
 
     # Google OAuth
