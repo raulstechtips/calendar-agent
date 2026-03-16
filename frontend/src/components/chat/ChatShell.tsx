@@ -1,6 +1,7 @@
 "use client";
 
 import { AlertCircle } from "lucide-react";
+import { useSession } from "next-auth/react";
 
 import {
   Alert,
@@ -13,11 +14,10 @@ import { useChat } from "@/hooks/useChat";
 import ChatInput from "./ChatInput";
 import ChatThread from "./ChatThread";
 
-interface ChatShellProps {
-  token: string;
-}
+export default function ChatShell() {
+  const { data: session, status } = useSession();
+  const token = session?.idToken ?? "";
 
-export default function ChatShell({ token }: ChatShellProps) {
   const {
     messages,
     isStreaming,
@@ -27,6 +27,14 @@ export default function ChatShell({ token }: ChatShellProps) {
     confirmAction,
     clearError,
   } = useChat(token);
+
+  if (status === "loading") {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full flex-col">

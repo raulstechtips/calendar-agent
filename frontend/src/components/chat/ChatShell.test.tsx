@@ -4,6 +4,14 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { ChatSSEEvent } from "@/lib/chat-stream";
 
+// Mock useSession from next-auth/react
+vi.mock("next-auth/react", () => ({
+  useSession: () => ({
+    data: { idToken: "test-token" },
+    status: "authenticated",
+  }),
+}));
+
 // Mock streamChat
 const mockStreamChat = vi.fn();
 vi.mock("@/lib/chat-stream", async (importOriginal) => {
@@ -31,7 +39,7 @@ async function* fakeStream(
 
 describe("ChatShell", () => {
   it("should render empty state with input", () => {
-    render(<ChatShell token="test-token" />);
+    render(<ChatShell />);
 
     expect(
       screen.getByRole("textbox", { name: /chat message/i }),
@@ -50,7 +58,7 @@ describe("ChatShell", () => {
     );
 
     const user = userEvent.setup();
-    render(<ChatShell token="test-token" />);
+    render(<ChatShell />);
 
     const input = screen.getByRole("textbox", { name: /chat message/i });
     await user.type(input, "hello{Enter}");
@@ -68,7 +76,7 @@ describe("ChatShell", () => {
     );
 
     const user = userEvent.setup();
-    render(<ChatShell token="test-token" />);
+    render(<ChatShell />);
 
     const input = screen.getByRole("textbox", { name: /chat message/i });
     await user.type(input, "test{Enter}");
