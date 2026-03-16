@@ -19,3 +19,4 @@ class AgentState(TypedDict):
     user_id: str
     pending_confirmation: dict[str, Any] | None
     remaining_steps: int
+    guardrail_verdict: str
