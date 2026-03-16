@@ -42,6 +42,20 @@ variable "subscription_id" {
   }
 }
 
+# --- Developer access ---
+
+variable "developer_object_id" {
+  description = "Entra ID object ID of the developer. Used to grant data-plane RBAC on AI services for local development with DefaultAzureCredential. Get it with: az ad signed-in-user show --query id -o tsv"
+  type        = string
+  sensitive   = true
+  default     = null
+
+  validation {
+    condition     = var.developer_object_id == null || can(regex("(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", var.developer_object_id))
+    error_message = "developer_object_id must be a valid GUID format."
+  }
+}
+
 # --- Network ---
 
 variable "deployer_ip_cidrs" {

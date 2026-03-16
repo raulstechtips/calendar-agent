@@ -7,6 +7,13 @@ environment     = "dev"
 location        = "eastus"
 subscription_id = "00000000-0000-0000-0000-000000000000" # Your Azure subscription ID
 
+# Developer access — grants data-plane RBAC on AI services for local development.
+# Without this, `az login` + DefaultAzureCredential can manage resources (Owner/Contributor)
+# but CANNOT call the service APIs (e.g. OpenAI completions, Search queries).
+# Local auth (API keys) is disabled on all services, so Entra ID RBAC is the only auth path.
+# Find your object ID: az ad signed-in-user show --query id -o tsv
+developer_object_id = "00000000-0000-0000-0000-000000000000"
+
 # Network — deployer IP allowlist for service firewalls
 # Find your IP: curl -s ifconfig.me
 deployer_ip_cidrs = ["203.0.113.1/32"]
