@@ -408,6 +408,7 @@ async def create_event(
             body["location"] = location
         if attendees:
             body["attendees"] = [{"email": email} for email in attendees]
+        body["extendedProperties"] = {"private": {"createdByAgent": "calendar-agent"}}
 
         loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(
