@@ -40,6 +40,11 @@ output "private_endpoints_subnet_id" {
   value       = module.networking.private_endpoints_subnet_id
 }
 
+output "dns_zone_ids" {
+  description = "Map of service key to Private DNS zone resource ID"
+  value       = module.networking.dns_zone_ids
+}
+
 # AI Services outputs
 
 output "openai_endpoint" {

@@ -3,13 +3,14 @@
 # -----------------------------------------------------------------------------
 
 resource "azurerm_cognitive_account" "openai" {
-  name                  = "openai-${var.name_suffix}"
-  resource_group_name   = var.resource_group_name
-  location              = var.location
-  kind                  = "OpenAI"
-  sku_name              = var.openai_sku
-  custom_subdomain_name = "openai-${var.name_suffix}"
-  local_auth_enabled    = false
+  name                          = "openai-${var.name_suffix}"
+  resource_group_name           = var.resource_group_name
+  location                      = var.location
+  kind                          = "OpenAI"
+  sku_name                      = var.openai_sku
+  custom_subdomain_name         = "openai-${var.name_suffix}"
+  local_auth_enabled            = false
+  public_network_access_enabled = true
 
   network_acls {
     default_action = "Deny"
@@ -73,13 +74,14 @@ resource "azurerm_search_service" "this" {
 # -----------------------------------------------------------------------------
 
 resource "azurerm_cognitive_account" "content_safety" {
-  name                  = "contentsafety-${var.name_suffix}"
-  resource_group_name   = var.resource_group_name
-  location              = var.location
-  kind                  = "ContentSafety"
-  sku_name              = var.content_safety_sku
-  custom_subdomain_name = "contentsafety-${var.name_suffix}"
-  local_auth_enabled    = false
+  name                          = "contentsafety-${var.name_suffix}"
+  resource_group_name           = var.resource_group_name
+  location                      = var.location
+  kind                          = "ContentSafety"
+  sku_name                      = var.content_safety_sku
+  custom_subdomain_name         = "contentsafety-${var.name_suffix}"
+  local_auth_enabled            = false
+  public_network_access_enabled = true
 
   network_acls {
     default_action = "Deny"
