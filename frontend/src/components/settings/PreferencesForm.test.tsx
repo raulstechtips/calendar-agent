@@ -26,6 +26,7 @@ describe("PreferencesForm", () => {
 
     const timezoneInput = screen.getByLabelText(/timezone/i);
     expect(timezoneInput).toBeInTheDocument();
+    expect(timezoneInput).toHaveValue("America/New_York");
   });
 
   it("should render with initial calendar value", () => {

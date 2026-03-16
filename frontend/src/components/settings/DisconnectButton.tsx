@@ -15,15 +15,18 @@ export function DisconnectButton() {
     setLoading(true);
     setError(null);
 
-    const result = await revokeAccess();
-
-    if (!result.success) {
-      setError(result.error ?? "Failed to disconnect");
+    try {
+      const result = await revokeAccess();
+      if (!result.success) {
+        setError(result.error ?? "Failed to disconnect");
+        return;
+      }
+      await signOut({ redirectTo: "/login" });
+    } catch {
+      setError("Failed to disconnect");
+    } finally {
       setLoading(false);
-      return;
     }
-
-    signOut({ redirectTo: "/login" });
   }
 
   function handleCancel() {

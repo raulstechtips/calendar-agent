@@ -31,7 +31,7 @@ async def get_user_profile(user: UserResponse) -> UserResponse:
     except (TokenNotFoundError, TokenEncryptionError):
         scopes = []
     except Exception:
-        logger.warning("Failed to read scopes for user %s", user.id, exc_info=True)
+        logger.exception("Failed to read scopes for user %s", user.id)
         scopes = []
 
     return UserResponse(
@@ -60,7 +60,7 @@ async def update_user_preferences(
     redis = get_redis()
     key = _prefs_key(user_id)
 
-    fields = updates.model_dump(exclude_unset=True)
+    fields = updates.model_dump(exclude_unset=True, exclude_none=True)
     if fields:
         await redis.hset(key, mapping=fields)  # type: ignore[misc]
 

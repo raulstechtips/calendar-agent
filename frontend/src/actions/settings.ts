@@ -27,18 +27,18 @@ export async function revokeAccess(): Promise<ActionResult> {
 export async function savePreferences(
   formData: FormData,
 ): Promise<SavePreferencesResult> {
-  const timezone = formData.get("timezone");
-  const defaultCalendar = formData.get("default_calendar");
+  const timezoneRaw = formData.get("timezone");
+  const defaultCalendarRaw = formData.get("default_calendar");
 
-  if (typeof timezone !== "string" || timezone.length === 0 || timezone.length > 100) {
+  const timezone = typeof timezoneRaw === "string" ? timezoneRaw.trim() : "";
+  const defaultCalendar =
+    typeof defaultCalendarRaw === "string" ? defaultCalendarRaw.trim() : "";
+
+  if (timezone.length === 0 || timezone.length > 100) {
     return { success: false, error: "Invalid timezone" };
   }
 
-  if (
-    typeof defaultCalendar !== "string" ||
-    defaultCalendar.length === 0 ||
-    defaultCalendar.length > 100
-  ) {
+  if (defaultCalendar.length === 0 || defaultCalendar.length > 100) {
     return { success: false, error: "Invalid calendar name" };
   }
 

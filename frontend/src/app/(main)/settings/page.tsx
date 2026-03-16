@@ -10,15 +10,17 @@ export default async function SettingsPage() {
   let scopes: string[] = [];
   let preferences: UserPreferences = { timezone: "UTC", default_calendar: "primary" };
 
-  try {
-    const [profile, prefs] = await Promise.all([
-      getUserProfile(),
-      getUserPreferences(),
-    ]);
-    scopes = profile.granted_scopes;
-    preferences = prefs;
-  } catch {
-    // Graceful fallback — page renders with defaults
+  const [profileResult, prefsResult] = await Promise.allSettled([
+    getUserProfile(),
+    getUserPreferences(),
+  ]);
+
+  if (profileResult.status === "fulfilled") {
+    scopes = profileResult.value.granted_scopes;
+  }
+
+  if (prefsResult.status === "fulfilled") {
+    preferences = prefsResult.value;
   }
 
   return (
