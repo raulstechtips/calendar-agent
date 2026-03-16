@@ -8,6 +8,25 @@ export async function submitConfirmation(
   actionId: string,
   approved: boolean,
 ): Promise<{ status: string }> {
+  // Validate inputs at the Server Action boundary
+  if (
+    typeof threadId !== "string" ||
+    threadId.length === 0 ||
+    threadId.length > 200
+  ) {
+    return { status: "error: invalid thread ID" };
+  }
+  if (
+    typeof actionId !== "string" ||
+    actionId.length === 0 ||
+    actionId.length > 200
+  ) {
+    return { status: "error: invalid action ID" };
+  }
+  if (typeof approved !== "boolean") {
+    return { status: "error: approved must be a boolean" };
+  }
+
   const response = await apiClient("/api/chat/confirm", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

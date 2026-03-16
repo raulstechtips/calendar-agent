@@ -232,6 +232,33 @@ describe("useChat", () => {
     expect(result.current.isStreaming).toBe(false);
   });
 
+  it("should set pendingConfirmation on confirmation SSE event", async () => {
+    mockStreamChat.mockReturnValue(
+      fakeStream([
+        { type: "token", content: "I'll create that event." },
+        {
+          type: "confirmation",
+          action: "create_event",
+          action_id: "act-123",
+          details: { summary: "Team standup", start: "2026-03-16 09:00:00" },
+        },
+        { type: "done", thread_id: "t1" },
+      ]),
+    );
+
+    const { result } = renderHook(() => useChat("test-token"));
+
+    await act(async () => {
+      await result.current.sendMessage("create event");
+    });
+
+    expect(result.current.pendingConfirmation).toEqual({
+      actionId: "act-123",
+      action: "create_event",
+      details: { summary: "Team standup", start: "2026-03-16 09:00:00" },
+    });
+  });
+
   it("should handle confirmation flow", async () => {
     mockStreamChat.mockReturnValue(
       fakeStream([

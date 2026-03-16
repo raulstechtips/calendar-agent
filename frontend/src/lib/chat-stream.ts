@@ -27,7 +27,19 @@ export interface BlockedEvent {
   content: string;
 }
 
-export type ChatSSEEvent = TokenEvent | DoneEvent | ErrorEvent | BlockedEvent;
+export interface ConfirmationEvent {
+  type: "confirmation";
+  action: string;
+  action_id: string;
+  details: Record<string, unknown>;
+}
+
+export type ChatSSEEvent =
+  | TokenEvent
+  | DoneEvent
+  | ErrorEvent
+  | BlockedEvent
+  | ConfirmationEvent;
 
 // ---------------------------------------------------------------------------
 // Chat message and state types (used by useChat and components)

@@ -230,5 +230,15 @@ function handleEvent(
     case "blocked":
       dispatch({ type: "BLOCKED", content: event.content });
       break;
+    case "confirmation":
+      dispatch({
+        type: "CONFIRMATION_RECEIVED",
+        confirmation: {
+          actionId: event.action_id,
+          action: event.action,
+          details: event.details,
+        },
+      });
+      break;
   }
 }

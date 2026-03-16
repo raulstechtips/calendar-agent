@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { ChatMessage as ChatMessageType, PendingConfirmation } from "@/lib/chat-stream";
@@ -24,12 +24,24 @@ export default function ChatThread({
   onReject,
 }: ChatThreadProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const rafRef = useRef<number>(0);
 
-  // Auto-scroll to bottom when messages change or streaming content updates
+  // Throttle scroll to once per animation frame to avoid jank during streaming
+  const scrollToBottom = useCallback(() => {
+    cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(() => {
+      bottomRef.current?.scrollIntoView?.({ behavior: "smooth" });
+    });
+  }, []);
+
   useEffect(() => {
-    // scrollIntoView may not exist in test environments (jsdom)
-    bottomRef.current?.scrollIntoView?.({ behavior: "smooth" });
-  }, [messages]);
+    scrollToBottom();
+  }, [messages, scrollToBottom]);
+
+  // Cleanup pending RAF on unmount
+  useEffect(() => {
+    return () => cancelAnimationFrame(rafRef.current);
+  }, []);
 
   if (messages.length === 0) {
     return (
