@@ -335,13 +335,6 @@ POST /api/chat/confirm           # Confirm a human-in-the-loop action
   Response: { "status": "executed" | "cancelled" }
 ```
 
-### Calendar Endpoints (direct, non-agent)
-
-```
-GET /api/calendar/events         # List events for date range
-  Query: start_date, end_date, calendar_id?
-```
-
 ---
 
 ## Agent Architecture
@@ -607,12 +600,11 @@ DEPLOYER_IP_CIDRS=                # Terraform deployer IP CIDR(s) for service fi
 
 **Worktree A (Frontend):**
 - **#23** Chat UI with streaming (needs #8, #16)
-- **#24** Calendar view (needs #8, #32)
+- **#24** Calendar view (needs #8) — fetches events via frontend Server Action calling Google Calendar API directly (no backend endpoint; see #32 closed)
 
 **Worktree B (Backend):**
 - **#20** Azure AI Search index (needs #12; integration test needs #48)
 - **#21** Embedding pipeline (needs #20; integration test needs #48)
-- **#32** GET /api/calendar/events endpoint (needs #12, #10)
 
 **Worktree C (Agent):**
 - **#22** Search as agent tool (needs #20, #21, #16)
