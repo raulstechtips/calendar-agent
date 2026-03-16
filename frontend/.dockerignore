@@ -1,0 +1,12 @@
+node_modules
+.next
+.env
+.env.*
+!.env.example
+.git
+.gitignore
+coverage
+*.tsbuildinfo
+vitest.config.ts
+vitest.setup.ts
+README.md
