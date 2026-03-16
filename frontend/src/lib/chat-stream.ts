@@ -74,6 +74,8 @@ interface StreamChatParams {
 export async function* streamChat(
   params: StreamChatParams,
 ): AsyncGenerator<ChatSSEEvent> {
+  // Intentionally duplicated from api.ts — can't import from api.ts because
+  // it pulls in auth() which is server-only and incompatible with client components
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
   const response = await fetch(`${apiUrl}/api/chat`, {
@@ -116,7 +118,11 @@ export async function* streamChat(
         if (line.startsWith("data: ")) {
           const json = line.slice(6).trim();
           if (json) {
-            yield JSON.parse(json) as ChatSSEEvent;
+            try {
+              yield JSON.parse(json) as ChatSSEEvent;
+            } catch {
+              // Skip malformed SSE events rather than aborting the stream
+            }
           }
         }
       }
@@ -126,7 +132,11 @@ export async function* streamChat(
     if (buffer.startsWith("data: ")) {
       const json = buffer.slice(6).trim();
       if (json) {
-        yield JSON.parse(json) as ChatSSEEvent;
+        try {
+          yield JSON.parse(json) as ChatSSEEvent;
+        } catch {
+          // Skip malformed trailing data
+        }
       }
     }
   } finally {

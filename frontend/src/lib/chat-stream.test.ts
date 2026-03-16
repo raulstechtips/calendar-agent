@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   type ChatSSEEvent,
@@ -53,6 +53,10 @@ const defaultParams = {
 };
 
 describe("streamChat", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("should parse token events from SSE stream", async () => {
     vi.stubGlobal(
       "fetch",
@@ -225,6 +229,36 @@ describe("streamChat", () => {
       expect.objectContaining({
         signal: controller.signal,
       }),
+    );
+  });
+
+  it("should skip malformed JSON in SSE events without aborting", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        mockResponse([
+          'data: {invalid json}\n\n',
+          'data: {"type":"token","content":"ok"}\n\n',
+          'data: {"type":"done","thread_id":"t1"}\n\n',
+        ]),
+      ),
+    );
+
+    const events = await collectEvents(defaultParams);
+
+    // Malformed event skipped, valid events still parsed
+    expect(events).toHaveLength(2);
+    expect(events[0]).toEqual({ type: "token", content: "ok" });
+  });
+
+  it("should propagate fetch rejection as error", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockRejectedValue(new Error("Network error")),
+    );
+
+    await expect(collectEvents(defaultParams)).rejects.toThrow(
+      "Network error",
     );
   });
 

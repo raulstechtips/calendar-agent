@@ -1,3 +1,5 @@
+"use client";
+
 import { Check, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -35,7 +37,7 @@ export default function ConfirmationCard({
             value != null ? (
               <div key={key} className="flex gap-2">
                 <dt className="font-medium text-muted-foreground">{key}:</dt>
-                <dd>{String(value)}</dd>
+                <dd>{typeof value === "object" ? JSON.stringify(value) : String(value)}</dd>
               </div>
             ) : null,
           )}

@@ -138,11 +138,11 @@ export function useChat(token: string): UseChatReturn {
       abortRef.current = controller;
 
       const userMsg: ChatMessage = {
-        id: `user-${Date.now()}`,
+        id: `user-${crypto.randomUUID()}`,
         role: "user",
         content: trimmed,
       };
-      const assistantId = `assistant-${Date.now()}`;
+      const assistantId = `assistant-${crypto.randomUUID()}`;
 
       dispatch({ type: "SEND_MESSAGE", message: userMsg, assistantId });
       streamingRef.current = true;
@@ -176,8 +176,19 @@ export function useChat(token: string): UseChatReturn {
   const confirmAction = useCallback(
     async (actionId: string, approved: boolean) => {
       if (!state.threadId) return;
-      await submitConfirmation(state.threadId, actionId, approved);
-      dispatch({ type: "CONFIRMATION_RESOLVED" });
+      try {
+        const result = await submitConfirmation(state.threadId, actionId, approved);
+        if (result.status.startsWith("error:")) {
+          dispatch({ type: "STREAM_ERROR", error: result.status });
+        } else {
+          dispatch({ type: "CONFIRMATION_RESOLVED" });
+        }
+      } catch (err) {
+        dispatch({
+          type: "STREAM_ERROR",
+          error: (err as Error).message || "Confirmation failed",
+        });
+      }
     },
     [state.threadId],
   );
