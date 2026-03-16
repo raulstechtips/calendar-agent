@@ -42,6 +42,14 @@ variable "subscription_id" {
   }
 }
 
+# --- Network ---
+
+variable "deployer_ip_cidrs" {
+  description = "List of CIDR strings for Terraform deployer IP allowlisting on service firewalls"
+  type        = list(string)
+  default     = []
+}
+
 # --- App secrets (stored in Key Vault) ---
 
 variable "fernet_key" {

@@ -7,6 +7,10 @@ environment     = "dev"
 location        = "eastus"
 subscription_id = "00000000-0000-0000-0000-000000000000" # Your Azure subscription ID
 
+# Network — deployer IP allowlist for service firewalls
+# Find your IP: curl -s ifconfig.me
+deployer_ip_cidrs = ["203.0.113.1/32"]
+
 # App secrets (set via TF_VAR_ env vars or terraform.tfvars — NEVER commit real values)
 # Generate: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 fernet_key = "CHANGE_ME"

@@ -42,6 +42,19 @@ resource "azurerm_resource_group" "this" {
 }
 
 # -----------------------------------------------------------------------------
+# Networking — VNet, subnets, Private DNS zones
+# -----------------------------------------------------------------------------
+
+module "networking" {
+  source = "../../modules/networking"
+
+  resource_group_name = azurerm_resource_group.this.name
+  location            = azurerm_resource_group.this.location
+  name_suffix         = local.name_suffix
+  common_tags         = local.common_tags
+}
+
+# -----------------------------------------------------------------------------
 # AI Services — OpenAI, AI Search, Content Safety + backend identity
 # -----------------------------------------------------------------------------
 
@@ -52,6 +65,12 @@ module "ai_services" {
   location            = azurerm_resource_group.this.location
   name_suffix         = local.name_suffix
   common_tags         = local.common_tags
+
+  private_endpoints_subnet_id = module.networking.private_endpoints_subnet_id
+  openai_dns_zone_id          = module.networking.dns_zone_ids["openai"]
+  search_dns_zone_id          = module.networking.dns_zone_ids["search"]
+  content_safety_dns_zone_id  = module.networking.dns_zone_ids["content_safety"]
+  deployer_ip_cidrs           = var.deployer_ip_cidrs
 }
 
 # --- Data Sources ---
@@ -71,6 +90,10 @@ module "key_vault" {
 
   soft_delete_retention_days = 7
   purge_protection_enabled   = false
+
+  private_endpoints_subnet_id = module.networking.private_endpoints_subnet_id
+  key_vault_dns_zone_id       = module.networking.dns_zone_ids["key_vault"]
+  deployer_ip_cidrs           = var.deployer_ip_cidrs
 }
 
 # --- App Secrets (Key Vault) ---
