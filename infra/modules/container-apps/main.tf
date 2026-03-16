@@ -1,7 +1,7 @@
 locals {
   acr_name      = replace(var.name_suffix, "-", "")
-  frontend_name = "ca-frontend-${var.name_suffix}"
-  backend_name  = "ca-backend-${var.name_suffix}"
+  frontend_name = "ca-fe-${var.name_suffix}"
+  backend_name  = "ca-be-${var.name_suffix}"
 
   # Derive FQDNs from CAE default_domain + deterministic app names.
   # This avoids a circular dependency between the two Container Apps:
