@@ -1,7 +1,10 @@
 "use client";
 
+import { useMemo } from "react";
+
 import {
   clipToDay,
+  computeEventLanes,
   getEventPosition,
   type CalendarEvent,
 } from "@/lib/calendar";
@@ -18,6 +21,11 @@ interface DayViewProps {
 export default function DayView({ events, date, onEventClick }: DayViewProps) {
   const allDayEvents = events.filter((e) => e.isAllDay);
   const timedEvents = events.filter((e) => !e.isAllDay);
+
+  const lanedEvents = useMemo(
+    () => computeEventLanes(timedEvents),
+    [timedEvents],
+  );
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -38,8 +46,8 @@ export default function DayView({ events, date, onEventClick }: DayViewProps) {
 
       {/* Time grid with events */}
       <TimeGrid columns={1}>
-        <div className="absolute inset-0">
-          {timedEvents.map((event) => {
+        <div className="absolute inset-0 px-1">
+          {lanedEvents.map(({ event, lane, totalLanes }) => {
             const { clippedStart, clippedEnd } = clipToDay(
               event.start,
               event.end,
@@ -50,11 +58,20 @@ export default function DayView({ events, date, onEventClick }: DayViewProps) {
               clippedEnd,
               HOUR_HEIGHT,
             );
+            const widthPercent = 100 / totalLanes;
+            const leftPercent = lane * widthPercent;
             return (
               <div
                 key={event.id}
-                className="absolute left-1 right-1"
-                style={{ top, height }}
+                className="absolute"
+                style={{
+                  top,
+                  height,
+                  left: `${leftPercent}%`,
+                  width: `${widthPercent}%`,
+                  paddingLeft: 2,
+                  paddingRight: 2,
+                }}
               >
                 <EventCard
                   event={event}

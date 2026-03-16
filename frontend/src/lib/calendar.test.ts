@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   addDays,
   clipToDay,
+  computeEventLanes,
   fetchCalendarEvents,
   formatDateLabel,
   formatISODate,
@@ -85,6 +86,14 @@ describe("overlapsDay", () => {
     expect(
       overlapsDay("2026-03-16T23:00:00", "2026-03-17T01:00:00", new Date(2026, 2, 17)),
     ).toBe(true);
+  });
+
+  it("should NOT overlap the day before for date-only all-day events", () => {
+    // Regression: new Date("2026-03-16") parses as UTC, shifting to March 15
+    // in US timezones. parseCalendarDate fixes this by parsing as local.
+    expect(
+      overlapsDay("2026-03-16", "2026-03-19", new Date(2026, 2, 15)),
+    ).toBe(false);
   });
 
   it("should not detect event on a non-overlapping day", () => {
@@ -217,6 +226,65 @@ describe("getEventPosition", () => {
     );
     expect(top).toBe(23 * hourHeight);
     expect(height).toBe(hourHeight); // 1 hour (clamped to midnight)
+  });
+});
+
+describe("computeEventLanes", () => {
+  const makeEvent = (
+    id: string,
+    start: string,
+    end: string,
+  ): CalendarEvent => ({
+    id,
+    summary: id,
+    start,
+    end,
+    isAllDay: false,
+    isAiCreated: false,
+  });
+
+  it("should assign single event to lane 0 with totalLanes 1", () => {
+    const events = [makeEvent("e1", "2026-03-16T10:00:00", "2026-03-16T11:00:00")];
+    const result = computeEventLanes(events);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.lane).toBe(0);
+    expect(result[0]?.totalLanes).toBe(1);
+  });
+
+  it("should assign non-overlapping events to the same lane", () => {
+    const events = [
+      makeEvent("e1", "2026-03-16T10:00:00", "2026-03-16T11:00:00"),
+      makeEvent("e2", "2026-03-16T14:00:00", "2026-03-16T15:00:00"),
+    ];
+    const result = computeEventLanes(events);
+    expect(result).toHaveLength(2);
+    // Both should be in lane 0 since they don't overlap
+    expect(result.every((r) => r.lane === 0)).toBe(true);
+    expect(result.every((r) => r.totalLanes === 1)).toBe(true);
+  });
+
+  it("should assign overlapping events to different lanes", () => {
+    const events = [
+      makeEvent("e1", "2026-03-16T10:00:00", "2026-03-16T11:30:00"),
+      makeEvent("e2", "2026-03-16T10:30:00", "2026-03-16T12:00:00"),
+    ];
+    const result = computeEventLanes(events);
+    expect(result).toHaveLength(2);
+    const lanes = new Set(result.map((r) => r.lane));
+    expect(lanes.size).toBe(2); // Different lanes
+    expect(result.every((r) => r.totalLanes === 2)).toBe(true);
+  });
+
+  it("should handle three overlapping events", () => {
+    const events = [
+      makeEvent("e1", "2026-03-16T10:00:00", "2026-03-16T12:00:00"),
+      makeEvent("e2", "2026-03-16T10:30:00", "2026-03-16T11:30:00"),
+      makeEvent("e3", "2026-03-16T11:00:00", "2026-03-16T12:30:00"),
+    ];
+    const result = computeEventLanes(events);
+    expect(result).toHaveLength(3);
+    const maxLanes = Math.max(...result.map((r) => r.totalLanes));
+    expect(maxLanes).toBeGreaterThanOrEqual(2);
   });
 });
 

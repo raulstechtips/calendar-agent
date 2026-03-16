@@ -230,6 +230,19 @@ export function isSameDay(a: Date, b: Date): boolean {
   );
 }
 
+/**
+ * Parse a calendar date/datetime string as local time.
+ * YYYY-MM-DD strings are parsed as local midnight (not UTC) to avoid
+ * timezone-shift bugs where "2026-03-16" becomes March 15 in US timezones.
+ */
+function parseCalendarDate(value: string): Date {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split("-").map(Number) as [number, number, number];
+    return new Date(year, month - 1, day);
+  }
+  return new Date(value);
+}
+
 /** Check if an event overlaps with a given day. */
 export function overlapsDay(
   eventStartISO: string,
@@ -237,8 +250,8 @@ export function overlapsDay(
   day: Date,
 ): boolean {
   const { start: dayStart, end: dayEnd } = getDayRange(day);
-  const eventStart = new Date(eventStartISO);
-  const eventEnd = new Date(eventEndISO);
+  const eventStart = parseCalendarDate(eventStartISO);
+  const eventEnd = parseCalendarDate(eventEndISO);
   return eventStart < dayEnd && eventEnd > dayStart;
 }
 
@@ -249,8 +262,8 @@ export function clipToDay(
   day: Date,
 ): { clippedStart: string; clippedEnd: string } {
   const { start: dayStart, end: dayEnd } = getDayRange(day);
-  const eventStart = new Date(eventStartISO);
-  const eventEnd = new Date(eventEndISO);
+  const eventStart = parseCalendarDate(eventStartISO);
+  const eventEnd = parseCalendarDate(eventEndISO);
   const clippedStart = new Date(Math.max(eventStart.getTime(), dayStart.getTime()));
   const clippedEnd = new Date(Math.min(eventEnd.getTime(), dayEnd.getTime()));
   return {
@@ -341,6 +354,69 @@ export function getEventPosition(
   const height = Math.max((durationMinutes / 60) * hourHeight, 16); // min 16px
 
   return { top, height };
+}
+
+/** Compute lane assignments for overlapping timed events. */
+export interface EventWithLane {
+  event: CalendarEvent;
+  lane: number;
+  totalLanes: number;
+}
+
+export function computeEventLanes(events: CalendarEvent[]): EventWithLane[] {
+  if (events.length === 0) return [];
+
+  // Sort by start time, then by duration (longer first)
+  const sorted = [...events].sort((a, b) => {
+    const diff = new Date(a.start).getTime() - new Date(b.start).getTime();
+    if (diff !== 0) return diff;
+    // Longer events first so they get lower lane indices
+    return (
+      new Date(b.end).getTime() -
+      new Date(b.start).getTime() -
+      (new Date(a.end).getTime() - new Date(a.start).getTime())
+    );
+  });
+
+  const lanes: Array<{ event: CalendarEvent; endTime: number }[]> = [];
+
+  // Assign each event to the first available lane
+  const assignments = sorted.map((event) => {
+    const startTime = new Date(event.start).getTime();
+    let laneIndex = lanes.findIndex((lane) => {
+      const lastInLane = lane[lane.length - 1];
+      return lastInLane !== undefined && lastInLane.endTime <= startTime;
+    });
+
+    if (laneIndex === -1) {
+      laneIndex = lanes.length;
+      lanes.push([]);
+    }
+
+    lanes[laneIndex]!.push({ event, endTime: new Date(event.end).getTime() });
+    return { event, lane: laneIndex };
+  });
+
+  // Build conflict groups to determine totalLanes per event
+  const result: EventWithLane[] = [];
+  for (const { event, lane } of assignments) {
+    const startTime = new Date(event.start).getTime();
+    const endTime = new Date(event.end).getTime();
+
+    // Count how many lanes overlap with this event's time range
+    let maxLane = lane;
+    for (const otherAssignment of assignments) {
+      const otherStart = new Date(otherAssignment.event.start).getTime();
+      const otherEnd = new Date(otherAssignment.event.end).getTime();
+      if (otherStart < endTime && otherEnd > startTime) {
+        maxLane = Math.max(maxLane, otherAssignment.lane);
+      }
+    }
+
+    result.push({ event, lane, totalLanes: maxLane + 1 });
+  }
+
+  return result;
 }
 
 /** Parse a date string from URL params, falling back to today. */

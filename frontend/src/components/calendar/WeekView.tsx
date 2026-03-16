@@ -3,6 +3,7 @@
 import {
   addDays,
   clipToDay,
+  computeEventLanes,
   getEventPosition,
   isSameDay,
   overlapsDay,
@@ -103,9 +104,10 @@ export default function WeekView({
             const dayEvents = timedEvents.filter((e) =>
               overlapsDay(e.start, e.end, day),
             );
+            const lanedEvents = computeEventLanes(dayEvents);
             return (
-              <div key={i} className="relative">
-                {dayEvents.map((event) => {
+              <div key={i} className="relative px-0.5">
+                {lanedEvents.map(({ event, lane, totalLanes }) => {
                   const { clippedStart, clippedEnd } = clipToDay(
                     event.start,
                     event.end,
@@ -116,11 +118,20 @@ export default function WeekView({
                     clippedEnd,
                     HOUR_HEIGHT,
                   );
+                  const widthPercent = 100 / totalLanes;
+                  const leftPercent = lane * widthPercent;
                   return (
                     <div
                       key={event.id}
-                      className="absolute left-0.5 right-0.5"
-                      style={{ top, height }}
+                      className="absolute"
+                      style={{
+                        top,
+                        height,
+                        left: `${leftPercent}%`,
+                        width: `${widthPercent}%`,
+                        paddingLeft: 1,
+                        paddingRight: 1,
+                      }}
                     >
                       <EventCard
                         event={event}
