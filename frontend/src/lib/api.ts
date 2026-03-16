@@ -56,6 +56,16 @@ export interface UserProfile {
   granted_scopes: string[];
 }
 
+export interface UserPreferences {
+  timezone: string;
+  default_calendar: string;
+}
+
+export interface UpdatePreferencesRequest {
+  timezone?: string;
+  default_calendar?: string;
+}
+
 /** Fetch the authenticated user's profile from the backend. */
 export async function getUserProfile(): Promise<UserProfile> {
   const response = await apiClient("/api/users/me");
@@ -66,4 +76,46 @@ export async function getUserProfile(): Promise<UserProfile> {
   }
 
   return (await response.json()) as UserProfile;
+}
+
+/** Fetch the authenticated user's preferences. */
+export async function getUserPreferences(): Promise<UserPreferences> {
+  const response = await apiClient("/api/users/me/preferences");
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new ApiError(text, response.status);
+  }
+
+  return (await response.json()) as UserPreferences;
+}
+
+/** Update user preferences (partial update). */
+export async function updateUserPreferences(
+  data: UpdatePreferencesRequest,
+): Promise<UserPreferences> {
+  const response = await apiClient("/api/users/me/preferences", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new ApiError(text, response.status);
+  }
+
+  return (await response.json()) as UserPreferences;
+}
+
+/** Revoke Google access and clear backend tokens. */
+export async function revokeGoogleAccess(): Promise<void> {
+  const response = await apiClient("/api/auth/revoke", {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new ApiError(text, response.status);
+  }
 }

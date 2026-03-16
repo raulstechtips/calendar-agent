@@ -11,6 +11,11 @@ from google.auth.exceptions import GoogleAuthError, TransportError
 from httpx import ASGITransport
 
 from app.auth.dependencies import get_current_user
+from app.auth.token_storage import (
+    StoredToken,
+    TokenEncryptionError,
+    TokenNotFoundError,
+)
 from app.main import app
 from app.users.schemas import UserResponse
 from tests.conftest import (
@@ -229,9 +234,15 @@ class TestGetMeEndpoint:
         google_claims: dict[str, Any],
         auth_headers: dict[str, str],
     ) -> None:
-        with patch(
-            "app.auth.dependencies.verify_oauth2_token",
-            return_value=google_claims,
+        with (
+            patch(
+                "app.auth.dependencies.verify_oauth2_token",
+                return_value=google_claims,
+            ),
+            patch(
+                "app.users.service.get_token",
+                side_effect=TokenNotFoundError("No token"),
+            ),
         ):
             response = await client.get("/api/users/me", headers=auth_headers)
 
@@ -280,9 +291,189 @@ class TestGetMeEndpoint:
 
         app.dependency_overrides[get_current_user] = override_user
 
-        response = await client.get("/api/users/me")
+        with patch(
+            "app.users.service.get_token",
+            side_effect=TokenNotFoundError("No token"),
+        ):
+            response = await client.get("/api/users/me")
+
         assert response.status_code == 200
         data = response.json()
         assert data["id"] == "override-user"
         assert data["email"] == "override@example.com"
-        assert data["granted_scopes"] == ["calendar.events"]
+
+
+def _override_user(user: UserResponse) -> None:
+    """Set a dependency override for get_current_user."""
+
+    async def _override() -> UserResponse:
+        return user
+
+    app.dependency_overrides[get_current_user] = _override
+
+
+class TestGetMeWithScopes:
+    """Tests for scope enrichment via Redis token storage."""
+
+    async def test_should_return_granted_scopes_from_redis(
+        self,
+        client: httpx.AsyncClient,
+        mock_user: UserResponse,
+    ) -> None:
+        _override_user(mock_user)
+        stored = StoredToken(
+            access_token="enc-access",
+            refresh_token="enc-refresh",
+            expires_at=9999999999,
+            scopes=[
+                "openid",
+                "email",
+                "profile",
+                "https://www.googleapis.com/auth/calendar.events",
+            ],
+        )
+
+        with patch("app.users.service.get_token", return_value=stored):
+            response = await client.get("/api/users/me")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["granted_scopes"] == [
+            "openid",
+            "email",
+            "profile",
+            "https://www.googleapis.com/auth/calendar.events",
+        ]
+
+    async def test_should_return_empty_scopes_when_no_token_in_redis(
+        self,
+        client: httpx.AsyncClient,
+        mock_user: UserResponse,
+    ) -> None:
+        _override_user(mock_user)
+
+        with patch(
+            "app.users.service.get_token",
+            side_effect=TokenNotFoundError("No token found"),
+        ):
+            response = await client.get("/api/users/me")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["granted_scopes"] == []
+
+    async def test_should_return_empty_scopes_on_token_decryption_error(
+        self,
+        client: httpx.AsyncClient,
+        mock_user: UserResponse,
+    ) -> None:
+        _override_user(mock_user)
+
+        with patch(
+            "app.users.service.get_token",
+            side_effect=TokenEncryptionError("Decryption failed"),
+        ):
+            response = await client.get("/api/users/me")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["granted_scopes"] == []
+
+
+class TestPreferencesEndpoints:
+    """Tests for GET/PATCH /api/users/me/preferences."""
+
+    @pytest.fixture(autouse=True)
+    def _setup_user(self, mock_user: UserResponse) -> None:
+        _override_user(mock_user)
+
+    async def test_should_return_default_preferences(
+        self,
+        client: httpx.AsyncClient,
+    ) -> None:
+        with patch("app.users.service.get_redis") as mock_redis:
+            mock_redis.return_value = AsyncMock()
+            mock_redis.return_value.hgetall = AsyncMock(return_value={})
+            response = await client.get("/api/users/me/preferences")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["timezone"] == "UTC"
+        assert data["default_calendar"] == "primary"
+
+    async def test_should_update_timezone(
+        self,
+        client: httpx.AsyncClient,
+    ) -> None:
+        store: dict[str, str] = {}
+
+        async def fake_hset(_key: str, mapping: dict[str, str]) -> int:
+            store.update(mapping)
+            return len(mapping)
+
+        async def fake_hgetall(_key: str) -> dict[str, str]:
+            return dict(store)
+
+        mock_redis_instance = AsyncMock()
+        mock_redis_instance.hset = fake_hset
+        mock_redis_instance.hgetall = fake_hgetall
+
+        with patch("app.users.service.get_redis", return_value=mock_redis_instance):
+            response = await client.patch(
+                "/api/users/me/preferences",
+                json={"timezone": "America/New_York"},
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["timezone"] == "America/New_York"
+        assert data["default_calendar"] == "primary"
+
+    async def test_should_update_partial_fields(
+        self,
+        client: httpx.AsyncClient,
+    ) -> None:
+        store: dict[str, str] = {
+            "timezone": "Europe/London",
+            "default_calendar": "work",
+        }
+
+        async def fake_hset(_key: str, mapping: dict[str, str]) -> int:
+            store.update(mapping)
+            return len(mapping)
+
+        async def fake_hgetall(_key: str) -> dict[str, str]:
+            return dict(store)
+
+        mock_redis_instance = AsyncMock()
+        mock_redis_instance.hset = fake_hset
+        mock_redis_instance.hgetall = fake_hgetall
+
+        with patch("app.users.service.get_redis", return_value=mock_redis_instance):
+            response = await client.patch(
+                "/api/users/me/preferences",
+                json={"default_calendar": "personal"},
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["default_calendar"] == "personal"
+        assert data["timezone"] == "Europe/London"
+
+    async def test_should_reject_oversized_input(
+        self,
+        client: httpx.AsyncClient,
+    ) -> None:
+        response = await client.patch(
+            "/api/users/me/preferences",
+            json={"timezone": "x" * 200},
+        )
+        assert response.status_code == 422
+
+    async def test_should_return_401_unauthenticated(
+        self,
+        client: httpx.AsyncClient,
+    ) -> None:
+        app.dependency_overrides.clear()
+        response = await client.get("/api/users/me/preferences")
+        assert response.status_code == 401
