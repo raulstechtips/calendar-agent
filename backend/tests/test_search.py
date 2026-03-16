@@ -6,6 +6,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from azure.core.exceptions import HttpResponseError, ServiceRequestError
 
 from app.search.index import build_index_schema
 
@@ -159,37 +160,55 @@ class TestSearchClientLifecycle:
 
         reset_search_client()
 
+    @patch("app.search.service.settings")
     @patch("app.search.service.DefaultAzureCredential")
     @patch("app.search.service.SearchClient")
     def test_get_search_client_returns_search_client(
-        self, mock_client_cls: MagicMock, mock_cred_cls: MagicMock
+        self,
+        mock_client_cls: MagicMock,
+        mock_cred_cls: MagicMock,
+        mock_settings: MagicMock,
     ) -> None:
         from app.search.service import get_search_client
 
+        mock_settings.azure_search_endpoint = "https://test.search.windows.net"
+        mock_settings.azure_managed_identity_client_id = ""
         mock_client_cls.return_value = MagicMock()
         result = get_search_client()
         assert result is mock_client_cls.return_value
 
+    @patch("app.search.service.settings")
     @patch("app.search.service.DefaultAzureCredential")
     @patch("app.search.service.SearchClient")
     def test_get_search_client_returns_same_instance(
-        self, mock_client_cls: MagicMock, mock_cred_cls: MagicMock
+        self,
+        mock_client_cls: MagicMock,
+        mock_cred_cls: MagicMock,
+        mock_settings: MagicMock,
     ) -> None:
         from app.search.service import get_search_client
 
+        mock_settings.azure_search_endpoint = "https://test.search.windows.net"
+        mock_settings.azure_managed_identity_client_id = ""
         mock_client_cls.return_value = MagicMock()
         first = get_search_client()
         second = get_search_client()
         assert first is second
         mock_client_cls.assert_called_once()
 
+    @patch("app.search.service.settings")
     @patch("app.search.service.DefaultAzureCredential")
     @patch("app.search.service.SearchClient")
     async def test_close_search_client_calls_close(
-        self, mock_client_cls: MagicMock, mock_cred_cls: MagicMock
+        self,
+        mock_client_cls: MagicMock,
+        mock_cred_cls: MagicMock,
+        mock_settings: MagicMock,
     ) -> None:
         from app.search.service import close_search_client, get_search_client
 
+        mock_settings.azure_search_endpoint = "https://test.search.windows.net"
+        mock_settings.azure_managed_identity_client_id = ""
         mock_client = AsyncMock()
         mock_client_cls.return_value = mock_client
         mock_cred = AsyncMock()
@@ -201,13 +220,19 @@ class TestSearchClientLifecycle:
         mock_client.close.assert_awaited_once()
         mock_cred.close.assert_awaited_once()
 
+    @patch("app.search.service.settings")
     @patch("app.search.service.DefaultAzureCredential")
     @patch("app.search.service.SearchClient")
     async def test_close_search_client_clears_singleton(
-        self, mock_client_cls: MagicMock, mock_cred_cls: MagicMock
+        self,
+        mock_client_cls: MagicMock,
+        mock_cred_cls: MagicMock,
+        mock_settings: MagicMock,
     ) -> None:
         from app.search.service import close_search_client, get_search_client
 
+        mock_settings.azure_search_endpoint = "https://test.search.windows.net"
+        mock_settings.azure_managed_identity_client_id = ""
         mock_client_cls.return_value = AsyncMock()
         mock_cred_cls.return_value = AsyncMock()
 
@@ -218,6 +243,15 @@ class TestSearchClientLifecycle:
         mock_client_cls.reset_mock()
         get_search_client()
         mock_client_cls.assert_called_once()
+
+    @patch("app.search.service.settings")
+    def test_should_reject_empty_endpoint(self, mock_settings: MagicMock) -> None:
+        from app.search.service import get_search_client
+
+        mock_settings.azure_search_endpoint = ""
+
+        with pytest.raises(RuntimeError, match="AZURE_SEARCH_ENDPOINT"):
+            get_search_client()
 
     async def test_close_search_client_safe_when_no_client(self) -> None:
         from app.search.service import close_search_client
@@ -525,3 +559,105 @@ class TestDeleteDocuments:
 
         with pytest.raises(ValueError, match="user_id"):
             await delete_documents(user_id="", document_ids=["doc1"])
+
+
+# ---------------------------------------------------------------------------
+# Retry behavior on upsert/delete
+# ---------------------------------------------------------------------------
+
+
+def _make_http_response_error(status_code: int = 429) -> HttpResponseError:
+    """Build an Azure HttpResponseError for testing."""
+    error = HttpResponseError(message=f"HTTP {status_code}")
+    error.status_code = status_code
+    return error
+
+
+class TestUpsertDocumentsRetry:
+    @pytest.fixture(autouse=True)
+    def _reset(self) -> None:
+        from app.search.service import reset_search_client
+
+        reset_search_client()
+
+    @patch("app.search.service.get_search_client")
+    @patch("asyncio.sleep", new_callable=AsyncMock)
+    @patch("app.search.service.settings")
+    async def test_should_retry_upsert_on_transient_error(
+        self,
+        mock_settings: MagicMock,
+        mock_sleep: AsyncMock,
+        mock_get_client: MagicMock,
+    ) -> None:
+        from app.search.service import upsert_documents
+
+        mock_settings.embedding_max_retries = 3
+        mock_settings.embedding_retry_initial_delay = 1.0
+
+        mock_result = MagicMock(succeeded=True, key="doc1")
+        mock_client = AsyncMock()
+        mock_client.merge_or_upload_documents = AsyncMock(
+            side_effect=[_make_http_response_error(429), [mock_result]]
+        )
+        mock_get_client.return_value = mock_client
+
+        result = await upsert_documents(
+            user_id="user-123", documents=[{"id": "doc1", "content": "test"}]
+        )
+
+        assert result == ["doc1"]
+        assert mock_client.merge_or_upload_documents.await_count == 2
+
+    @patch("app.search.service.get_search_client")
+    @patch("asyncio.sleep", new_callable=AsyncMock)
+    @patch("app.search.service.settings")
+    async def test_should_raise_upsert_after_max_retries(
+        self,
+        mock_settings: MagicMock,
+        mock_sleep: AsyncMock,
+        mock_get_client: MagicMock,
+    ) -> None:
+        from app.search.service import upsert_documents
+
+        mock_settings.embedding_max_retries = 3
+        mock_settings.embedding_retry_initial_delay = 1.0
+
+        mock_client = AsyncMock()
+        mock_client.merge_or_upload_documents = AsyncMock(
+            side_effect=_make_http_response_error(429)
+        )
+        mock_get_client.return_value = mock_client
+
+        with pytest.raises(HttpResponseError):
+            await upsert_documents(
+                user_id="user-123", documents=[{"id": "doc1", "content": "test"}]
+            )
+
+        assert mock_client.merge_or_upload_documents.await_count == 3
+
+    @patch("app.search.service.get_search_client")
+    @patch("asyncio.sleep", new_callable=AsyncMock)
+    @patch("app.search.service.settings")
+    async def test_should_retry_on_service_request_error(
+        self,
+        mock_settings: MagicMock,
+        mock_sleep: AsyncMock,
+        mock_get_client: MagicMock,
+    ) -> None:
+        from app.search.service import upsert_documents
+
+        mock_settings.embedding_max_retries = 3
+        mock_settings.embedding_retry_initial_delay = 1.0
+
+        mock_result = MagicMock(succeeded=True, key="doc1")
+        mock_client = AsyncMock()
+        mock_client.merge_or_upload_documents = AsyncMock(
+            side_effect=[ServiceRequestError("connection reset"), [mock_result]]
+        )
+        mock_get_client.return_value = mock_client
+
+        result = await upsert_documents(
+            user_id="user-123", documents=[{"id": "doc1", "content": "test"}]
+        )
+
+        assert result == ["doc1"]

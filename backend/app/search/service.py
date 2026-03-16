@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
+from azure.core.exceptions import HttpResponseError, ServiceRequestError
 from azure.identity.aio import DefaultAzureCredential
 from azure.search.documents.aio import SearchClient
 from azure.search.documents.models import VectorizedQuery, VectorQuery
@@ -21,6 +23,10 @@ def get_search_client() -> SearchClient:
     """Return the singleton async SearchClient, creating on first call."""
     global _search_client, _credential
     if _search_client is None:
+        if not settings.azure_search_endpoint:
+            raise RuntimeError(
+                "AZURE_SEARCH_ENDPOINT is not configured — cannot create search client"
+            )
         _credential = DefaultAzureCredential(
             managed_identity_client_id=settings.azure_managed_identity_client_id
             or None,
@@ -110,6 +116,19 @@ async def search(
     return [dict(result) async for result in results]
 
 
+_RETRYABLE_STATUS_CODES = (429, 500, 503)
+
+
+def _is_retryable_search_error(exc: BaseException) -> bool:
+    """Check if an Azure Search error is transient and retryable."""
+    if isinstance(exc, ServiceRequestError):
+        return True
+    return (
+        isinstance(exc, HttpResponseError)
+        and exc.status_code in _RETRYABLE_STATUS_CODES
+    )
+
+
 async def upsert_documents(user_id: str, documents: list[dict[str, Any]]) -> list[str]:
     """Upsert documents into the search index with user_id enforcement.
 
@@ -122,10 +141,36 @@ async def upsert_documents(user_id: str, documents: list[dict[str, Any]]) -> lis
     _validate_user_id(user_id)
 
     docs_with_user = [{**doc, "user_id": user_id} for doc in documents]
-
     client = get_search_client()
-    results = await client.merge_or_upload_documents(docs_with_user)
-    return [r.key for r in results if r.succeeded and r.key is not None]
+
+    delay = settings.embedding_retry_initial_delay
+    for attempt in range(1, settings.embedding_max_retries + 1):
+        try:
+            results = await client.merge_or_upload_documents(docs_with_user)
+            succeeded = [r.key for r in results if r.succeeded and r.key is not None]
+            logger.info(
+                "Upserted %d/%d documents for user %s",
+                len(succeeded),
+                len(documents),
+                user_id,
+            )
+            return succeeded
+        except (HttpResponseError, ServiceRequestError) as exc:
+            is_last = attempt == settings.embedding_max_retries
+            if not _is_retryable_search_error(exc) or is_last:
+                logger.error("Upsert failed for user %s: %s", user_id, exc)
+                raise
+            logger.warning(
+                "Upsert attempt %d/%d failed for user %s: %s, retrying in %.1fs",
+                attempt,
+                settings.embedding_max_retries,
+                user_id,
+                type(exc).__name__,
+                delay,
+            )
+            await asyncio.sleep(delay)
+            delay *= 2
+    raise RuntimeError("unreachable")
 
 
 async def delete_documents(user_id: str, document_ids: list[str]) -> list[str]:
@@ -137,5 +182,32 @@ async def delete_documents(user_id: str, document_ids: list[str]) -> list[str]:
 
     client = get_search_client()
     docs_to_delete = [{"id": doc_id} for doc_id in document_ids]
-    results = await client.delete_documents(docs_to_delete)
-    return [r.key for r in results if r.succeeded and r.key is not None]
+
+    delay = settings.embedding_retry_initial_delay
+    for attempt in range(1, settings.embedding_max_retries + 1):
+        try:
+            results = await client.delete_documents(docs_to_delete)
+            succeeded = [r.key for r in results if r.succeeded and r.key is not None]
+            logger.info(
+                "Deleted %d/%d documents for user %s",
+                len(succeeded),
+                len(document_ids),
+                user_id,
+            )
+            return succeeded
+        except (HttpResponseError, ServiceRequestError) as exc:
+            is_last = attempt == settings.embedding_max_retries
+            if not _is_retryable_search_error(exc) or is_last:
+                logger.error("Delete failed for user %s: %s", user_id, exc)
+                raise
+            logger.warning(
+                "Delete attempt %d/%d failed for user %s: %s, retrying in %.1fs",
+                attempt,
+                settings.embedding_max_retries,
+                user_id,
+                type(exc).__name__,
+                delay,
+            )
+            await asyncio.sleep(delay)
+            delay *= 2
+    raise RuntimeError("unreachable")

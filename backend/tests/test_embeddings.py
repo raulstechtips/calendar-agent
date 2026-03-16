@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
+import openai
 import pytest
 
 
@@ -47,6 +50,7 @@ class TestEmbeddingsClientLifecycle:
 
         reset_embeddings_client()
 
+    @patch("app.search.embeddings.settings")
     @patch("app.search.embeddings.AzureOpenAIEmbeddings")
     @patch("app.search.embeddings.get_bearer_token_provider")
     @patch("app.search.embeddings.DefaultAzureCredential")
@@ -55,9 +59,14 @@ class TestEmbeddingsClientLifecycle:
         mock_cred_cls: MagicMock,
         mock_token_provider: MagicMock,
         mock_embeddings_cls: MagicMock,
+        mock_settings: MagicMock,
     ) -> None:
-        from app.core.config import settings
         from app.search.embeddings import get_embeddings_client
+
+        mock_settings.azure_openai_endpoint = "https://test.openai.azure.com"
+        mock_settings.azure_openai_embed_deployment = "text-embedding-3-small"
+        mock_settings.azure_openai_api_version = "2024-10-21"
+        mock_settings.azure_managed_identity_client_id = ""
 
         mock_cred = MagicMock()
         mock_cred_cls.return_value = mock_cred
@@ -72,11 +81,12 @@ class TestEmbeddingsClientLifecycle:
         )
         mock_embeddings_cls.assert_called_once()
         call_kwargs = mock_embeddings_cls.call_args.kwargs
-        assert call_kwargs["azure_endpoint"] == settings.azure_openai_endpoint
-        assert call_kwargs["deployment"] == settings.azure_openai_embed_deployment
-        assert call_kwargs["openai_api_version"] == settings.azure_openai_api_version
+        assert call_kwargs["azure_endpoint"] == "https://test.openai.azure.com"
+        assert call_kwargs["deployment"] == "text-embedding-3-small"
+        assert call_kwargs["openai_api_version"] == "2024-10-21"
         assert client is mock_embeddings_cls.return_value
 
+    @patch("app.search.embeddings.settings")
     @patch("app.search.embeddings.AzureOpenAIEmbeddings")
     @patch("app.search.embeddings.get_bearer_token_provider")
     @patch("app.search.embeddings.DefaultAzureCredential")
@@ -85,9 +95,12 @@ class TestEmbeddingsClientLifecycle:
         mock_cred_cls: MagicMock,
         mock_token_provider: MagicMock,
         mock_embeddings_cls: MagicMock,
+        mock_settings: MagicMock,
     ) -> None:
         from app.search.embeddings import get_embeddings_client
 
+        mock_settings.azure_openai_endpoint = "https://test.openai.azure.com"
+        mock_settings.azure_managed_identity_client_id = ""
         mock_embeddings_cls.return_value = MagicMock()
 
         first = get_embeddings_client()
@@ -96,6 +109,7 @@ class TestEmbeddingsClientLifecycle:
         assert first is second
         mock_embeddings_cls.assert_called_once()
 
+    @patch("app.search.embeddings.settings")
     @patch("app.search.embeddings.AzureOpenAIEmbeddings")
     @patch("app.search.embeddings.get_bearer_token_provider")
     @patch("app.search.embeddings.DefaultAzureCredential")
@@ -104,9 +118,12 @@ class TestEmbeddingsClientLifecycle:
         mock_cred_cls: MagicMock,
         mock_token_provider: MagicMock,
         mock_embeddings_cls: MagicMock,
+        mock_settings: MagicMock,
     ) -> None:
         from app.search.embeddings import close_embeddings_client, get_embeddings_client
 
+        mock_settings.azure_openai_endpoint = "https://test.openai.azure.com"
+        mock_settings.azure_managed_identity_client_id = ""
         mock_cred = MagicMock()
         mock_cred_cls.return_value = mock_cred
         mock_embeddings_cls.return_value = MagicMock()
@@ -124,6 +141,15 @@ class TestEmbeddingsClientLifecycle:
         from app.search.embeddings import close_embeddings_client
 
         close_embeddings_client()
+
+    @patch("app.search.embeddings.settings")
+    def test_should_reject_empty_endpoint(self, mock_settings: MagicMock) -> None:
+        from app.search.embeddings import get_embeddings_client
+
+        mock_settings.azure_openai_endpoint = ""
+
+        with pytest.raises(RuntimeError, match="AZURE_OPENAI_ENDPOINT"):
+            get_embeddings_client()
 
 
 class TestFormatEventText:
@@ -402,3 +428,541 @@ class TestDeleteEvents:
 
         result = await delete_events(user_id="user-123", source_ids=[])
         assert result == []
+
+
+# ---------------------------------------------------------------------------
+# Helpers for constructing openai errors in tests
+# ---------------------------------------------------------------------------
+
+
+def _make_rate_limit_error(
+    retry_after: str | None = None,
+) -> openai.RateLimitError:
+    """Build an openai.RateLimitError for testing."""
+    headers: dict[str, str] = {}
+    if retry_after is not None:
+        headers["retry-after"] = retry_after
+    response = httpx.Response(
+        429,
+        headers=headers,
+        request=httpx.Request("POST", "https://fake.openai.azure.com"),
+    )
+    return openai.RateLimitError(
+        message="Rate limit exceeded",
+        response=response,
+        body={"error": {"message": "rate limited"}},
+    )
+
+
+def _make_connection_error() -> openai.APIConnectionError:
+    """Build an openai.APIConnectionError for testing."""
+    return openai.APIConnectionError(
+        request=httpx.Request("POST", "https://fake.openai.azure.com"),
+    )
+
+
+def _make_bad_request_error() -> openai.BadRequestError:
+    """Build a non-transient openai.BadRequestError for testing."""
+    response = httpx.Response(
+        400,
+        request=httpx.Request("POST", "https://fake.openai.azure.com"),
+    )
+    return openai.BadRequestError(
+        message="Invalid input",
+        response=response,
+        body={"error": {"message": "bad request"}},
+    )
+
+
+# ---------------------------------------------------------------------------
+# process_events — batching behavior
+# ---------------------------------------------------------------------------
+
+
+class TestProcessEventsBatching:
+    @pytest.fixture(autouse=True)
+    def _reset(self) -> None:
+        from app.search.embeddings import reset_embeddings_client
+
+        reset_embeddings_client()
+
+    @patch("app.search.embeddings.upsert_documents", new_callable=AsyncMock)
+    @patch("app.search.embeddings.get_embeddings_client")
+    @patch("app.search.embeddings.settings")
+    @patch("asyncio.sleep", new_callable=AsyncMock)
+    async def test_should_batch_events_according_to_batch_size(
+        self,
+        mock_sleep: AsyncMock,
+        mock_settings: MagicMock,
+        mock_get_client: MagicMock,
+        mock_upsert: AsyncMock,
+    ) -> None:
+        from app.search.embeddings import process_events
+
+        mock_settings.embedding_batch_size = 50
+        mock_settings.embedding_batch_delay = 1.0
+        mock_settings.embedding_max_retries = 3
+        mock_settings.embedding_retry_initial_delay = 1.0
+        mock_settings.embedding_max_text_length = 5000
+
+        mock_client = AsyncMock()
+        mock_client.aembed_documents = AsyncMock(
+            side_effect=[
+                [[0.1] * 1536] * 50,
+                [[0.1] * 1536] * 50,
+                [[0.1] * 1536] * 20,
+            ]
+        )
+        mock_get_client.return_value = mock_client
+
+        mock_upsert.side_effect = [
+            [f"evt-{i}" for i in range(50)],
+            [f"evt-{i}" for i in range(50, 100)],
+            [f"evt-{i}" for i in range(100, 120)],
+        ]
+
+        events = [_make_event(event_id=f"evt-{i}") for i in range(120)]
+        await process_events(user_id="user-123", events=events)
+
+        assert mock_client.aembed_documents.await_count == 3
+
+    @patch("app.search.embeddings.upsert_documents", new_callable=AsyncMock)
+    @patch("app.search.embeddings.get_embeddings_client")
+    @patch("app.search.embeddings.settings")
+    @patch("asyncio.sleep", new_callable=AsyncMock)
+    async def test_should_process_single_batch_when_events_fit(
+        self,
+        mock_sleep: AsyncMock,
+        mock_settings: MagicMock,
+        mock_get_client: MagicMock,
+        mock_upsert: AsyncMock,
+    ) -> None:
+        from app.search.embeddings import process_events
+
+        mock_settings.embedding_batch_size = 50
+        mock_settings.embedding_batch_delay = 1.0
+        mock_settings.embedding_max_retries = 3
+        mock_settings.embedding_retry_initial_delay = 1.0
+        mock_settings.embedding_max_text_length = 5000
+
+        mock_client = AsyncMock()
+        mock_client.aembed_documents = AsyncMock(return_value=[[0.1] * 1536] * 30)
+        mock_get_client.return_value = mock_client
+        mock_upsert.return_value = [f"evt-{i}" for i in range(30)]
+
+        events = [_make_event(event_id=f"evt-{i}") for i in range(30)]
+        await process_events(user_id="user-123", events=events)
+
+        mock_client.aembed_documents.assert_awaited_once()
+
+    @patch("app.search.embeddings.upsert_documents", new_callable=AsyncMock)
+    @patch("app.search.embeddings.get_embeddings_client")
+    @patch("app.search.embeddings.settings")
+    @patch("asyncio.sleep", new_callable=AsyncMock)
+    async def test_should_aggregate_upserted_ids_across_batches(
+        self,
+        mock_sleep: AsyncMock,
+        mock_settings: MagicMock,
+        mock_get_client: MagicMock,
+        mock_upsert: AsyncMock,
+    ) -> None:
+        from app.search.embeddings import process_events
+
+        mock_settings.embedding_batch_size = 50
+        mock_settings.embedding_batch_delay = 1.0
+        mock_settings.embedding_max_retries = 3
+        mock_settings.embedding_retry_initial_delay = 1.0
+        mock_settings.embedding_max_text_length = 5000
+
+        mock_client = AsyncMock()
+        mock_client.aembed_documents = AsyncMock(
+            side_effect=[[[0.1] * 1536] * 50, [[0.1] * 1536] * 50]
+        )
+        mock_get_client.return_value = mock_client
+
+        mock_upsert.side_effect = [
+            [f"evt-{i}" for i in range(50)],
+            [f"evt-{i}" for i in range(50, 100)],
+        ]
+
+        events = [_make_event(event_id=f"evt-{i}") for i in range(100)]
+        result = await process_events(user_id="user-123", events=events)
+
+        assert len(result) == 100
+
+    @patch("app.search.embeddings.upsert_documents", new_callable=AsyncMock)
+    @patch("app.search.embeddings.get_embeddings_client")
+    @patch("app.search.embeddings.settings")
+    @patch("asyncio.sleep", new_callable=AsyncMock)
+    async def test_should_upsert_each_batch_separately(
+        self,
+        mock_sleep: AsyncMock,
+        mock_settings: MagicMock,
+        mock_get_client: MagicMock,
+        mock_upsert: AsyncMock,
+    ) -> None:
+        from app.search.embeddings import process_events
+
+        mock_settings.embedding_batch_size = 50
+        mock_settings.embedding_batch_delay = 1.0
+        mock_settings.embedding_max_retries = 3
+        mock_settings.embedding_retry_initial_delay = 1.0
+        mock_settings.embedding_max_text_length = 5000
+
+        mock_client = AsyncMock()
+        mock_client.aembed_documents = AsyncMock(
+            side_effect=[[[0.1] * 1536] * 50, [[0.1] * 1536] * 50]
+        )
+        mock_get_client.return_value = mock_client
+
+        mock_upsert.side_effect = [
+            [f"evt-{i}" for i in range(50)],
+            [f"evt-{i}" for i in range(50, 100)],
+        ]
+
+        events = [_make_event(event_id=f"evt-{i}") for i in range(100)]
+        await process_events(user_id="user-123", events=events)
+
+        assert mock_upsert.await_count == 2
+
+    @patch("app.search.embeddings.upsert_documents", new_callable=AsyncMock)
+    @patch("app.search.embeddings.get_embeddings_client")
+    @patch("app.search.embeddings.settings")
+    @patch("asyncio.sleep", new_callable=AsyncMock)
+    async def test_should_delay_between_batches(
+        self,
+        mock_sleep: AsyncMock,
+        mock_settings: MagicMock,
+        mock_get_client: MagicMock,
+        mock_upsert: AsyncMock,
+    ) -> None:
+        from app.search.embeddings import process_events
+
+        mock_settings.embedding_batch_size = 50
+        mock_settings.embedding_batch_delay = 2.0
+        mock_settings.embedding_max_retries = 3
+        mock_settings.embedding_retry_initial_delay = 1.0
+        mock_settings.embedding_max_text_length = 5000
+
+        mock_client = AsyncMock()
+        mock_client.aembed_documents = AsyncMock(
+            side_effect=[[[0.1] * 1536] * 50, [[0.1] * 1536] * 50]
+        )
+        mock_get_client.return_value = mock_client
+        mock_upsert.side_effect = [
+            [f"evt-{i}" for i in range(50)],
+            [f"evt-{i}" for i in range(50, 100)],
+        ]
+
+        events = [_make_event(event_id=f"evt-{i}") for i in range(100)]
+        await process_events(user_id="user-123", events=events)
+
+        # Should sleep between batch 1 and batch 2, but not after batch 2
+        mock_sleep.assert_awaited_once_with(2.0)
+
+    @patch("app.search.embeddings.upsert_documents", new_callable=AsyncMock)
+    @patch("app.search.embeddings.get_embeddings_client")
+    @patch("app.search.embeddings.settings")
+    @patch("asyncio.sleep", new_callable=AsyncMock)
+    async def test_should_log_batch_progress(
+        self,
+        mock_sleep: AsyncMock,
+        mock_settings: MagicMock,
+        mock_get_client: MagicMock,
+        mock_upsert: AsyncMock,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        from app.search.embeddings import process_events
+
+        mock_settings.embedding_batch_size = 50
+        mock_settings.embedding_batch_delay = 1.0
+        mock_settings.embedding_max_retries = 3
+        mock_settings.embedding_retry_initial_delay = 1.0
+        mock_settings.embedding_max_text_length = 5000
+
+        mock_client = AsyncMock()
+        mock_client.aembed_documents = AsyncMock(
+            side_effect=[[[0.1] * 1536] * 50, [[0.1] * 1536] * 20]
+        )
+        mock_get_client.return_value = mock_client
+        mock_upsert.side_effect = [
+            [f"evt-{i}" for i in range(50)],
+            [f"evt-{i}" for i in range(50, 70)],
+        ]
+
+        events = [_make_event(event_id=f"evt-{i}") for i in range(70)]
+        with caplog.at_level(logging.INFO):
+            await process_events(user_id="user-123", events=events)
+
+        assert "Batch 1/2: embedded 50 events for user user-123" in caplog.text
+        assert "Batch 2/2: embedded 20 events for user user-123" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# _embed_with_retry — retry and backoff behavior
+# ---------------------------------------------------------------------------
+
+
+class TestEmbedWithRetry:
+    @pytest.fixture(autouse=True)
+    def _reset(self) -> None:
+        from app.search.embeddings import reset_embeddings_client
+
+        reset_embeddings_client()
+
+    @patch("app.search.embeddings.settings")
+    @patch("asyncio.sleep", new_callable=AsyncMock)
+    async def test_should_retry_on_rate_limit_error(
+        self, mock_sleep: AsyncMock, mock_settings: MagicMock
+    ) -> None:
+        from app.search.embeddings import (
+            _embed_with_retry,  # pyright: ignore[reportPrivateUsage]
+        )
+
+        mock_settings.embedding_max_retries = 3
+        mock_settings.embedding_retry_initial_delay = 1.0
+
+        mock_client = AsyncMock()
+        mock_client.aembed_documents = AsyncMock(
+            side_effect=[_make_rate_limit_error(), [[0.1] * 1536]]
+        )
+
+        result = await _embed_with_retry(
+            mock_client, ["text"], "user-123", batch_num=1, total_batches=1
+        )
+
+        assert result == [[0.1] * 1536]
+        assert mock_client.aembed_documents.await_count == 2
+
+    @patch("app.search.embeddings.settings")
+    @patch("asyncio.sleep", new_callable=AsyncMock)
+    async def test_should_retry_on_connection_error(
+        self, mock_sleep: AsyncMock, mock_settings: MagicMock
+    ) -> None:
+        from app.search.embeddings import (
+            _embed_with_retry,  # pyright: ignore[reportPrivateUsage]
+        )
+
+        mock_settings.embedding_max_retries = 3
+        mock_settings.embedding_retry_initial_delay = 1.0
+
+        mock_client = AsyncMock()
+        mock_client.aembed_documents = AsyncMock(
+            side_effect=[_make_connection_error(), [[0.1] * 1536]]
+        )
+
+        result = await _embed_with_retry(
+            mock_client, ["text"], "user-123", batch_num=1, total_batches=1
+        )
+
+        assert result == [[0.1] * 1536]
+        assert mock_client.aembed_documents.await_count == 2
+
+    @patch("app.search.embeddings.settings")
+    @patch("asyncio.sleep", new_callable=AsyncMock)
+    async def test_should_raise_after_max_retries_exhausted(
+        self, mock_sleep: AsyncMock, mock_settings: MagicMock
+    ) -> None:
+        from app.search.embeddings import (
+            _embed_with_retry,  # pyright: ignore[reportPrivateUsage]
+        )
+
+        mock_settings.embedding_max_retries = 3
+        mock_settings.embedding_retry_initial_delay = 1.0
+
+        mock_client = AsyncMock()
+        mock_client.aembed_documents = AsyncMock(side_effect=_make_rate_limit_error())
+
+        with pytest.raises(openai.RateLimitError):
+            await _embed_with_retry(
+                mock_client, ["text"], "user-123", batch_num=1, total_batches=1
+            )
+
+        assert mock_client.aembed_documents.await_count == 3
+
+    @patch("app.search.embeddings.settings")
+    @patch("asyncio.sleep", new_callable=AsyncMock)
+    async def test_should_not_retry_on_non_transient_errors(
+        self, mock_sleep: AsyncMock, mock_settings: MagicMock
+    ) -> None:
+        from app.search.embeddings import (
+            _embed_with_retry,  # pyright: ignore[reportPrivateUsage]
+        )
+
+        mock_settings.embedding_max_retries = 3
+        mock_settings.embedding_retry_initial_delay = 1.0
+
+        mock_client = AsyncMock()
+        mock_client.aembed_documents = AsyncMock(side_effect=_make_bad_request_error())
+
+        with pytest.raises(openai.BadRequestError):
+            await _embed_with_retry(
+                mock_client, ["text"], "user-123", batch_num=1, total_batches=1
+            )
+
+        mock_client.aembed_documents.assert_awaited_once()
+
+    @patch("app.search.embeddings.settings")
+    @patch("asyncio.sleep", new_callable=AsyncMock)
+    async def test_should_use_exponential_backoff_on_retry(
+        self, mock_sleep: AsyncMock, mock_settings: MagicMock
+    ) -> None:
+        from app.search.embeddings import (
+            _embed_with_retry,  # pyright: ignore[reportPrivateUsage]
+        )
+
+        mock_settings.embedding_max_retries = 3
+        mock_settings.embedding_retry_initial_delay = 1.0
+
+        mock_client = AsyncMock()
+        mock_client.aembed_documents = AsyncMock(
+            side_effect=[
+                _make_rate_limit_error(),
+                _make_rate_limit_error(),
+                [[0.1] * 1536],
+            ]
+        )
+
+        await _embed_with_retry(
+            mock_client, ["text"], "user-123", batch_num=1, total_batches=1
+        )
+
+        assert mock_sleep.await_count == 2
+        mock_sleep.assert_any_await(1.0)
+        mock_sleep.assert_any_await(2.0)
+
+    @patch("app.search.embeddings.settings")
+    @patch("asyncio.sleep", new_callable=AsyncMock)
+    async def test_should_respect_retry_after_header(
+        self, mock_sleep: AsyncMock, mock_settings: MagicMock
+    ) -> None:
+        from app.search.embeddings import (
+            _embed_with_retry,  # pyright: ignore[reportPrivateUsage]
+        )
+
+        mock_settings.embedding_max_retries = 3
+        mock_settings.embedding_retry_initial_delay = 1.0
+
+        mock_client = AsyncMock()
+        mock_client.aembed_documents = AsyncMock(
+            side_effect=[_make_rate_limit_error(retry_after="30"), [[0.1] * 1536]]
+        )
+
+        await _embed_with_retry(
+            mock_client, ["text"], "user-123", batch_num=1, total_batches=1
+        )
+
+        mock_sleep.assert_awaited_once_with(30.0)
+
+
+# ---------------------------------------------------------------------------
+# process_events — partial upsert retry
+# ---------------------------------------------------------------------------
+
+
+class TestProcessEventsPartialUpsertRetry:
+    @pytest.fixture(autouse=True)
+    def _reset(self) -> None:
+        from app.search.embeddings import reset_embeddings_client
+
+        reset_embeddings_client()
+
+    @patch("app.search.embeddings.upsert_documents", new_callable=AsyncMock)
+    @patch("app.search.embeddings.get_embeddings_client")
+    @patch("app.search.embeddings.settings")
+    @patch("asyncio.sleep", new_callable=AsyncMock)
+    async def test_should_retry_partially_failed_upserts(
+        self,
+        mock_sleep: AsyncMock,
+        mock_settings: MagicMock,
+        mock_get_client: MagicMock,
+        mock_upsert: AsyncMock,
+    ) -> None:
+        from app.search.embeddings import process_events
+
+        mock_settings.embedding_batch_size = 50
+        mock_settings.embedding_batch_delay = 1.0
+        mock_settings.embedding_max_retries = 3
+        mock_settings.embedding_retry_initial_delay = 1.0
+        mock_settings.embedding_max_text_length = 5000
+
+        mock_client = AsyncMock()
+        mock_client.aembed_documents = AsyncMock(return_value=[[0.1] * 1536] * 3)
+        mock_get_client.return_value = mock_client
+
+        # First upsert: 2/3 succeed; retry: remaining 1 succeeds
+        mock_upsert.side_effect = [
+            ["evt-1", "evt-2"],  # initial: evt-3 failed
+            ["evt-3"],  # retry: evt-3 succeeds
+        ]
+
+        events = [_make_event(event_id=f"evt-{i + 1}") for i in range(3)]
+        result = await process_events(user_id="user-123", events=events)
+
+        assert sorted(result) == ["evt-1", "evt-2", "evt-3"]
+        assert mock_upsert.await_count == 2
+
+        # Retry call should only contain the failed document
+        retry_call_docs = mock_upsert.call_args_list[1].args[1]
+        assert len(retry_call_docs) == 1
+        assert retry_call_docs[0]["id"] == "evt-3"
+
+    @patch("app.search.embeddings.upsert_documents", new_callable=AsyncMock)
+    @patch("app.search.embeddings.get_embeddings_client")
+    @patch("app.search.embeddings.settings")
+    @patch("asyncio.sleep", new_callable=AsyncMock)
+    async def test_should_give_up_after_max_retries_for_failed_upserts(
+        self,
+        mock_sleep: AsyncMock,
+        mock_settings: MagicMock,
+        mock_get_client: MagicMock,
+        mock_upsert: AsyncMock,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        from app.search.embeddings import process_events
+
+        mock_settings.embedding_batch_size = 50
+        mock_settings.embedding_batch_delay = 1.0
+        mock_settings.embedding_max_retries = 3
+        mock_settings.embedding_retry_initial_delay = 1.0
+        mock_settings.embedding_max_text_length = 5000
+
+        mock_client = AsyncMock()
+        mock_client.aembed_documents = AsyncMock(return_value=[[0.1] * 1536] * 3)
+        mock_get_client.return_value = mock_client
+
+        # Initial: evt-3 fails; all retries also fail
+        mock_upsert.side_effect = [
+            ["evt-1", "evt-2"],  # initial
+            [],  # retry 1
+            [],  # retry 2
+            [],  # retry 3
+        ]
+
+        events = [_make_event(event_id=f"evt-{i + 1}") for i in range(3)]
+        with caplog.at_level(logging.WARNING):
+            result = await process_events(user_id="user-123", events=events)
+
+        assert result == ["evt-1", "evt-2"]
+        # 1 initial + 3 retries
+        assert mock_upsert.await_count == 4
+        assert "failed after retries" in caplog.text
+        assert "evt-3" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# format_event_text — truncation
+# ---------------------------------------------------------------------------
+
+
+class TestFormatEventTextTruncation:
+    @patch("app.search.embeddings.settings")
+    def test_should_truncate_long_description(self, mock_settings: MagicMock) -> None:
+        from app.search.embeddings import format_event_text
+
+        mock_settings.embedding_max_text_length = 100
+
+        event = _make_event(description="x" * 10000)
+        text = format_event_text(event)
+
+        assert len(text) <= 100

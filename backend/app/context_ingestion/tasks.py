@@ -7,6 +7,7 @@ login flow is never blocked.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 
@@ -33,6 +34,7 @@ async def run_ingestion(user_id: str) -> None:
         if metadata is None or not metadata.sync_token:
             logger.info("Starting full ingest for user %s", user_id)
             await full_ingest(user_id)
+            logger.info("Ingestion complete for user %s", user_id)
             return
 
         now = int(time.time())
@@ -47,6 +49,10 @@ async def run_ingestion(user_id: str) -> None:
 
         logger.info("Starting delta sync for user %s", user_id)
         await delta_sync(user_id, metadata)
+        logger.info("Ingestion complete for user %s", user_id)
 
+    except asyncio.CancelledError:
+        logger.info("Ingestion task cancelled for user %s", user_id)
+        raise
     except Exception:
         logger.exception("Background ingestion failed for user %s", user_id)

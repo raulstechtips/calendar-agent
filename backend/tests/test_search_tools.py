@@ -193,9 +193,7 @@ class TestSearchContext:
         mock_client.aembed_query = AsyncMock(side_effect=RuntimeError("API down"))
         mock_get_embed.return_value = mock_client
 
-        result = await search_context.ainvoke(
-            {"query": "test", "user_id": "user-123"}
-        )
+        result = await search_context.ainvoke({"query": "test", "user_id": "user-123"})
 
         assert isinstance(result, str)
         assert "search failed" in result.lower()
@@ -214,9 +212,7 @@ class TestSearchContext:
         mock_get_embed.return_value = mock_client
         mock_search.side_effect = RuntimeError("Search service down")
 
-        result = await search_context.ainvoke(
-            {"query": "test", "user_id": "user-123"}
-        )
+        result = await search_context.ainvoke({"query": "test", "user_id": "user-123"})
 
         assert isinstance(result, str)
         assert "search failed" in result.lower()
@@ -254,9 +250,7 @@ class TestSearchContext:
         mock_get_embed.return_value = mock_client
         mock_search.return_value = []
 
-        await search_context.ainvoke(
-            {"query": "test", "top": 0, "user_id": "user-123"}
-        )
+        await search_context.ainvoke({"query": "test", "top": 0, "user_id": "user-123"})
 
         assert mock_search.call_args.kwargs["top"] == 1
 

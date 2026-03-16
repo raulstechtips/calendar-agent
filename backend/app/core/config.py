@@ -1,6 +1,6 @@
 """Application settings loaded from environment variables."""
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 
 
@@ -20,6 +20,13 @@ class Settings(BaseSettings):
 
     # Azure AI Content Safety — no API key; uses DefaultAzureCredential
     azure_content_safety_endpoint: str = ""
+
+    # Embedding pipeline
+    embedding_batch_size: int = Field(default=50, gt=0)
+    embedding_max_retries: int = Field(default=3, ge=1)
+    embedding_retry_initial_delay: float = Field(default=1.0, gt=0)
+    embedding_batch_delay: float = Field(default=1.0, ge=0)
+    embedding_max_text_length: int = Field(default=5000, gt=0)
 
     # Redis
     redis_url: str = "redis://localhost:6379/0"
