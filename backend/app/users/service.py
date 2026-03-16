@@ -48,8 +48,8 @@ async def get_user_preferences(user_id: str) -> UserPreferencesResponse:
     redis = get_redis()
     data: dict[str, str] = await redis.hgetall(_prefs_key(user_id))  # type: ignore[misc]
     return UserPreferencesResponse(
-        timezone=data.get("timezone", "UTC"),
-        default_calendar=data.get("default_calendar", "primary"),
+        timezone=data.get("timezone") or "UTC",
+        default_calendar=data.get("default_calendar") or "primary",
     )
 
 

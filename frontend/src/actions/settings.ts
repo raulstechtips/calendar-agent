@@ -1,6 +1,6 @@
 "use server";
 
-import { revokeGoogleAccess, updateUserPreferences } from "@/lib/api";
+import { ApiError, revokeGoogleAccess, updateUserPreferences } from "@/lib/api";
 import type { UserPreferences } from "@/lib/api";
 
 interface ActionResult {
@@ -18,6 +18,11 @@ export async function revokeAccess(): Promise<ActionResult> {
     await revokeGoogleAccess();
     return { success: true };
   } catch (err) {
+    // Token already gone (404) or session expired (401) — user is effectively
+    // disconnected, so treat as idempotent success and allow sign-out.
+    if (err instanceof ApiError && (err.status === 404 || err.status === 401)) {
+      return { success: true };
+    }
     const message = err instanceof Error ? err.message : "Revoke failed";
     return { success: false, error: message };
   }
