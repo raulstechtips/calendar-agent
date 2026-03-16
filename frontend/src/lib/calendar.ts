@@ -108,6 +108,14 @@ export async function fetchCalendarEvents(
 
       if (response.status === 403) {
         const reason = await parse403Reason(response);
+        if (reason === "apiDisabled") {
+          return {
+            ok: false,
+            error: "api_error",
+            message:
+              "The Google Calendar API is not enabled for this project. An administrator needs to enable it in the Google Cloud Console.",
+          };
+        }
         if (reason === "rateLimited") {
           return {
             ok: false,
@@ -186,13 +194,16 @@ function mapGoogleEvent(event: GoogleEvent): CalendarEvent {
 
 async function parse403Reason(
   response: Response,
-): Promise<"rateLimited" | "insufficientScope"> {
+): Promise<"rateLimited" | "apiDisabled" | "insufficientScope"> {
   try {
     const body = (await response.json()) as {
       error?: { errors?: Array<{ domain?: string; reason?: string }> };
     };
-    const domain = body.error?.errors?.[0]?.domain;
-    if (domain === "usageLimits") return "rateLimited";
+    const firstError = body.error?.errors?.[0];
+    if (firstError?.domain === "usageLimits") {
+      if (firstError.reason === "accessNotConfigured") return "apiDisabled";
+      return "rateLimited";
+    }
   } catch {
     // Parse failure — fall through to default
   }

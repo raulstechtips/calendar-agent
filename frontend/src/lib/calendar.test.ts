@@ -530,4 +530,25 @@ describe("fetchCalendarEvents", () => {
     expect(result.error).toBe("api_error");
     expect(result.message).toContain("Too many requests");
   });
+
+  it("should return api_error for API-not-enabled 403", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: {
+            code: 403,
+            errors: [{ domain: "usageLimits", reason: "accessNotConfigured" }],
+          },
+        }),
+        { status: 403 },
+      ),
+    );
+
+    const result = await fetchCalendarEvents(mockAccessToken, timeMin, timeMax);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toBe("api_error");
+    expect(result.message).toContain("not enabled");
+  });
 });
