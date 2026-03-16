@@ -10,6 +10,7 @@ from app.agents.router import router as agents_router
 from app.auth.router import router as auth_router
 from app.core.middleware import setup_middleware
 from app.core.redis import close_redis, get_redis
+from app.search.embeddings import close_embeddings_client, get_embeddings_client
 from app.search.service import close_search_client, get_search_client
 from app.users.router import router as users_router
 
@@ -21,6 +22,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Startup: eagerly create clients (connections are lazy on first command)
     get_redis()
     get_search_client()
+    get_embeddings_client()
     yield
     # Shutdown: clean up connections (isolate exceptions so both always run)
     try:
@@ -31,6 +33,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         await close_search_client()
     except Exception:
         logger.exception("Failed to close search client")
+    try:
+        close_embeddings_client()
+    except Exception:
+        logger.exception("Failed to close embeddings client")
 
 
 app = FastAPI(title="AI Calendar Assistant", lifespan=lifespan)
