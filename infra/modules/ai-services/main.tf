@@ -64,7 +64,6 @@ resource "azurerm_search_service" "this" {
   local_authentication_enabled  = false
   authentication_failure_mode   = "http403"
   public_network_access_enabled = false
-  allowed_ips                   = var.deployer_ip_cidrs
 
   tags = var.common_tags
 }
