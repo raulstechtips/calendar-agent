@@ -77,3 +77,17 @@ variable "deployer_ip_cidrs" {
   description = "List of CIDR strings allowed through service firewalls (Terraform deployer IPs)"
   type        = list(string)
 }
+
+# --- Developer access (dev environment only) ---
+
+variable "environment" {
+  description = "Deployment environment name. Used to guard developer-only resources (e.g. RBAC role assignments for local development)."
+  type        = string
+}
+
+variable "developer_object_id" {
+  description = "Entra ID object ID of the developer running the app locally. Grants data-plane RBAC roles so DefaultAzureCredential (az login) can access AI services during local development. Get it with: az ad signed-in-user show --query id -o tsv"
+  type        = string
+  sensitive   = true
+  default     = null
+}
