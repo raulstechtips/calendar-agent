@@ -5,7 +5,7 @@
 import type { JWT } from "next-auth/jwt";
 
 const BACKEND_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+  process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export async function syncTokenToBackend(token: JWT): Promise<void> {
   const { idToken, accessToken, refreshToken, expiresAt, scope } = token;
