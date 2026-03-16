@@ -1,12 +1,14 @@
-"""ReAct agent definition using create_react_agent with AzureChatOpenAI."""
+"""ReAct agent definition with Content Safety guard nodes."""
 
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 from langchain_core.language_models import BaseChatModel
 from langchain_openai import AzureChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import create_react_agent  # pyright: ignore[reportDeprecated]
 
+from app.agents.guardrails import input_guard, output_guard
 from app.agents.prompts import build_prompt
 from app.agents.state import AgentState
 from app.agents.tools.calendar_tools import calendar_tools
@@ -32,21 +34,39 @@ def get_llm() -> AzureChatOpenAI:
 
 
 def create_agent(llm: BaseChatModel | None = None) -> CompiledStateGraph:  # type: ignore[type-arg]
-    """Create and compile the ReAct agent graph.
+    """Create the guarded agent graph: input_guard -> agent -> output_guard.
 
     Args:
         llm: Optional LLM override for testing. Uses AzureChatOpenAI by default.
     """
     if llm is None:
         llm = get_llm()
-    checkpointer = MemorySaver()
-    return create_react_agent(  # pyright: ignore[reportDeprecated]
+
+    # Inner ReAct agent (no checkpointer — outer graph owns it)
+    react_agent = create_react_agent(  # pyright: ignore[reportDeprecated]
         model=llm,
         tools=calendar_tools,
-        checkpointer=checkpointer,
         state_schema=AgentState,
         prompt=build_prompt,
     )
+
+    # Wrapper graph with guard nodes
+    workflow = StateGraph(AgentState)
+    workflow.add_node("input_guard", input_guard)
+    workflow.add_node("agent", react_agent)
+    workflow.add_node("output_guard", output_guard)
+
+    workflow.add_edge(START, "input_guard")
+    workflow.add_conditional_edges(
+        "input_guard",
+        lambda s: "blocked" if s.get("guardrail_verdict") == "blocked" else "pass",
+        {"blocked": END, "pass": "agent"},
+    )
+    workflow.add_edge("agent", "output_guard")
+    workflow.add_edge("output_guard", END)
+
+    checkpointer = MemorySaver()
+    return workflow.compile(checkpointer=checkpointer)
 
 
 def get_agent() -> CompiledStateGraph:  # type: ignore[type-arg]

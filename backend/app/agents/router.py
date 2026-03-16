@@ -96,11 +96,21 @@ async def _stream_response(
                 "messages": [HumanMessage(content=message)],
                 "user_id": user_id,
                 "pending_confirmation": None,
+                "guardrail_verdict": "",
             },
             config={"configurable": {"thread_id": thread_id}},
             stream_mode="messages",
         ):
             if not (isinstance(chunk, AIMessageChunk) and chunk.content):
+                continue
+
+            # Emit "blocked" event for guard node responses
+            if isinstance(_metadata, dict) and _metadata.get("langgraph_node") == "input_guard":
+                blocked_event: dict[str, Any] = {
+                    "type": "blocked",
+                    "content": str(chunk.content),
+                }
+                yield f"data: {json.dumps(blocked_event)}\n\n"
                 continue
 
             text = buf + str(chunk.content)

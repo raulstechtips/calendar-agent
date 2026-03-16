@@ -19,9 +19,8 @@ class Settings(BaseSettings):
     azure_search_key: str = ""
     azure_search_index: str = "calendar-context"
 
-    # Azure AI Content Safety
+    # Azure AI Content Safety — no API key; uses DefaultAzureCredential
     azure_content_safety_endpoint: str = ""
-    azure_content_safety_key: str = ""
 
     # Redis
     redis_url: str = "redis://localhost:6379/0"
