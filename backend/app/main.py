@@ -10,6 +10,7 @@ from app.agents.router import router as agents_router
 from app.auth.router import router as auth_router
 from app.core.middleware import setup_middleware
 from app.core.redis import close_redis, get_redis
+from app.search.service import close_search_client
 from app.users.router import router as users_router
 
 logger = logging.getLogger(__name__)
@@ -20,8 +21,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Startup: eagerly create the Redis client (connection is lazy on first command)
     get_redis()
     yield
-    # Shutdown: clean up Redis connection
+    # Shutdown: clean up connections
     await close_redis()
+    await close_search_client()
 
 
 app = FastAPI(title="AI Calendar Assistant", lifespan=lifespan)
