@@ -15,6 +15,7 @@ from app.search.index import create_index
 from app.search.service import close_search_client, get_search_client
 from app.users.router import router as users_router
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 

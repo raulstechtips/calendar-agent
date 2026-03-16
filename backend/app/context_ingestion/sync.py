@@ -173,12 +173,13 @@ async def full_ingest(user_id: str) -> None:
         service, time_min=time_min, time_max=time_max
     )
 
-    await ingest_events(user_id=user_id, created=events)
-
+    # Store metadata first so partial failures don't cause full re-ingest loops
     await store_sync_metadata(
         user_id,
         SyncMetadata(sync_token=sync_token, last_ingested_at=int(time.time())),
     )
+
+    await ingest_events(user_id=user_id, created=events)
 
     logger.info(
         "Full ingest complete for user %s: %d events ingested",
@@ -217,12 +218,13 @@ async def delta_sync(user_id: str, metadata: SyncMetadata) -> None:
         else:
             updated.append(event)
 
-    await ingest_events(user_id=user_id, updated=updated, deleted_ids=deleted_ids)
-
+    # Store metadata first so partial failures don't cause full re-ingest loops
     await store_sync_metadata(
         user_id,
         SyncMetadata(sync_token=new_sync_token, last_ingested_at=int(time.time())),
     )
+
+    await ingest_events(user_id=user_id, updated=updated, deleted_ids=deleted_ids)
 
     logger.info(
         "Delta sync complete for user %s: %d updated, %d deleted",

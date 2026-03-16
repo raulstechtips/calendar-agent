@@ -333,7 +333,7 @@ class TestFullIngest:
     @patch("app.context_ingestion.sync.ingest_events", new_callable=AsyncMock)
     @patch("app.context_ingestion.sync._fetch_all_events", new_callable=AsyncMock)
     @patch("app.context_ingestion.sync._get_calendar_service", new_callable=AsyncMock)
-    async def test_should_store_sync_metadata_after_success(
+    async def test_should_store_metadata_before_ingest(
         self,
         mock_service: AsyncMock,
         mock_fetch: AsyncMock,
@@ -342,6 +342,16 @@ class TestFullIngest:
     ) -> None:
         from app.context_ingestion.sync import full_ingest
 
+        call_order: list[str] = []
+
+        def track_store(*a: Any, **kw: Any) -> None:
+            call_order.append("store")
+
+        def track_ingest(*a: Any, **kw: Any) -> None:
+            call_order.append("ingest")
+
+        mock_store_meta.side_effect = track_store
+        mock_ingest.side_effect = track_ingest
         mock_fetch.return_value = ([], "sync-tok-new")
 
         await full_ingest("user-123")
@@ -352,6 +362,30 @@ class TestFullIngest:
         metadata: SyncMetadata = call_args[0][1]
         assert metadata.sync_token == "sync-tok-new"
         assert metadata.last_ingested_at > 0
+        assert call_order == ["store", "ingest"]
+
+    @patch("app.context_ingestion.sync.store_sync_metadata", new_callable=AsyncMock)
+    @patch("app.context_ingestion.sync.ingest_events", new_callable=AsyncMock)
+    @patch("app.context_ingestion.sync._fetch_all_events", new_callable=AsyncMock)
+    @patch("app.context_ingestion.sync._get_calendar_service", new_callable=AsyncMock)
+    async def test_should_store_metadata_even_when_ingest_fails(
+        self,
+        mock_service: AsyncMock,
+        mock_fetch: AsyncMock,
+        mock_ingest: AsyncMock,
+        mock_store_meta: AsyncMock,
+    ) -> None:
+        from app.context_ingestion.sync import full_ingest
+
+        mock_fetch.return_value = ([_make_event()], "sync-tok-new")
+        mock_ingest.side_effect = RuntimeError("rate limit exceeded")
+
+        with pytest.raises(RuntimeError, match="rate limit exceeded"):
+            await full_ingest("user-123")
+
+        mock_store_meta.assert_awaited_once()
+        metadata: SyncMetadata = mock_store_meta.call_args[0][1]
+        assert metadata.sync_token == "sync-tok-new"
 
     @patch("app.context_ingestion.sync.store_sync_metadata", new_callable=AsyncMock)
     @patch("app.context_ingestion.sync.ingest_events", new_callable=AsyncMock)
@@ -508,7 +542,7 @@ class TestDeltaSync:
     @patch("app.context_ingestion.sync.ingest_events", new_callable=AsyncMock)
     @patch("app.context_ingestion.sync._fetch_all_events", new_callable=AsyncMock)
     @patch("app.context_ingestion.sync._get_calendar_service", new_callable=AsyncMock)
-    async def test_should_store_new_sync_token(
+    async def test_should_store_new_sync_token_before_ingest(
         self,
         mock_service: AsyncMock,
         mock_fetch: AsyncMock,
@@ -517,6 +551,16 @@ class TestDeltaSync:
     ) -> None:
         from app.context_ingestion.sync import delta_sync
 
+        call_order: list[str] = []
+
+        def track_store(*a: Any, **kw: Any) -> None:
+            call_order.append("store")
+
+        def track_ingest(*a: Any, **kw: Any) -> None:
+            call_order.append("ingest")
+
+        mock_store_meta.side_effect = track_store
+        mock_ingest.side_effect = track_ingest
         mock_fetch.return_value = ([], "brand-new-tok")
         metadata = SyncMetadata(sync_token="old-tok", last_ingested_at=1710000000)
 
@@ -526,6 +570,31 @@ class TestDeltaSync:
         stored: SyncMetadata = mock_store_meta.call_args[0][1]
         assert stored.sync_token == "brand-new-tok"
         assert stored.last_ingested_at > 0
+        assert call_order == ["store", "ingest"]
+
+    @patch("app.context_ingestion.sync.store_sync_metadata", new_callable=AsyncMock)
+    @patch("app.context_ingestion.sync.ingest_events", new_callable=AsyncMock)
+    @patch("app.context_ingestion.sync._fetch_all_events", new_callable=AsyncMock)
+    @patch("app.context_ingestion.sync._get_calendar_service", new_callable=AsyncMock)
+    async def test_should_store_metadata_even_when_ingest_fails(
+        self,
+        mock_service: AsyncMock,
+        mock_fetch: AsyncMock,
+        mock_ingest: AsyncMock,
+        mock_store_meta: AsyncMock,
+    ) -> None:
+        from app.context_ingestion.sync import delta_sync
+
+        mock_fetch.return_value = ([_make_event()], "new-tok")
+        mock_ingest.side_effect = RuntimeError("rate limit exceeded")
+        metadata = SyncMetadata(sync_token="old-tok", last_ingested_at=1710000000)
+
+        with pytest.raises(RuntimeError, match="rate limit exceeded"):
+            await delta_sync("user-123", metadata)
+
+        mock_store_meta.assert_awaited_once()
+        stored: SyncMetadata = mock_store_meta.call_args[0][1]
+        assert stored.sync_token == "new-tok"
 
 
 # ---------------------------------------------------------------------------
