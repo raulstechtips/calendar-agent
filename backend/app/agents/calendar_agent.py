@@ -12,6 +12,7 @@ from app.agents.guardrails import input_guard, output_guard
 from app.agents.prompts import build_prompt
 from app.agents.state import AgentState
 from app.agents.tools.calendar_tools import calendar_tools
+from app.agents.tools.search_tools import search_tools
 from app.core.config import settings
 
 _agent: CompiledStateGraph | None = None  # type: ignore[type-arg]
@@ -43,9 +44,11 @@ def create_agent(llm: BaseChatModel | None = None) -> CompiledStateGraph:  # typ
         llm = get_llm()
 
     # Inner ReAct agent (no checkpointer — outer graph owns it)
+    all_tools = calendar_tools + search_tools
+
     react_agent = create_react_agent(  # pyright: ignore[reportDeprecated]
         model=llm,
-        tools=calendar_tools,
+        tools=all_tools,
         state_schema=AgentState,
         prompt=build_prompt,
     )

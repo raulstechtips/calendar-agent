@@ -100,8 +100,10 @@ def _sample_stored_token() -> StoredToken:
 
 
 class TestAuthCallbackEndpoint:
+    @patch("app.auth.router.run_ingestion", new_callable=AsyncMock)
     async def test_should_return_204_on_valid_token_sync(
         self,
+        mock_ingestion: AsyncMock,
         client: httpx.AsyncClient,
         mock_user: UserResponse,
         valid_sync_body: dict[str, object],
@@ -143,8 +145,10 @@ class TestAuthCallbackEndpoint:
         )
         assert response.status_code == 422
 
+    @patch("app.auth.router.run_ingestion", new_callable=AsyncMock)
     async def test_should_return_500_on_encryption_failure(
         self,
+        mock_ingestion: AsyncMock,
         client: httpx.AsyncClient,
         mock_user: UserResponse,
         valid_sync_body: dict[str, object],
@@ -159,6 +163,21 @@ class TestAuthCallbackEndpoint:
             response = await client.post("/api/auth/callback", json=valid_sync_body)
 
         assert response.status_code == 500
+
+    @patch("app.auth.router.run_ingestion", new_callable=AsyncMock)
+    async def test_should_trigger_background_ingestion(
+        self,
+        mock_ingestion: AsyncMock,
+        client: httpx.AsyncClient,
+        mock_user: UserResponse,
+        valid_sync_body: dict[str, object],
+    ) -> None:
+        _override_user(mock_user)
+
+        with patch("app.auth.service.store_token", new_callable=AsyncMock):
+            await client.post("/api/auth/callback", json=valid_sync_body)
+
+        mock_ingestion.assert_awaited_once_with(TEST_USER_ID)
 
 
 class TestAuthRefreshEndpoint:

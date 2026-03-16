@@ -71,6 +71,8 @@ module "ai_services" {
   search_dns_zone_id          = module.networking.dns_zone_ids["search"]
   content_safety_dns_zone_id  = module.networking.dns_zone_ids["content_safety"]
   deployer_ip_cidrs           = var.deployer_ip_cidrs
+  environment                 = var.environment
+  developer_object_id         = var.developer_object_id
 }
 
 # --- Data Sources ---

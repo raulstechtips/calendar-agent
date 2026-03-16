@@ -62,8 +62,10 @@ resource "azurerm_search_service" "this" {
   location                      = var.location
   sku                           = var.search_sku
   local_authentication_enabled  = false
-  authentication_failure_mode   = "http403"
-  public_network_access_enabled = false
+  public_network_access_enabled = true
+  # azurerm_search_service uses top-level allowed_ips, not a network_acls block
+  # like azurerm_cognitive_account — this is the correct attribute per the provider.
+  allowed_ips = var.deployer_ip_cidrs
 
   tags = var.common_tags
 }
@@ -122,6 +124,45 @@ resource "azurerm_role_assignment" "backend_content_safety" {
   scope                = azurerm_cognitive_account.content_safety.id
   role_definition_name = "Cognitive Services User"
   principal_id         = azurerm_user_assigned_identity.backend.principal_id
+}
+
+# -----------------------------------------------------------------------------
+# RBAC Role Assignments — developer → AI services (local development)
+#
+# These grant data-plane access to the developer's Entra ID user so they can
+# run the app locally with DefaultAzureCredential (via `az login`).
+# Owner/Contributor roles only cover the control plane (managing resources),
+# NOT the data plane (calling the APIs). With local_auth disabled on all
+# services, Entra ID RBAC is the only auth path.
+#
+# Guarded by environment == "dev" — these must never be created in stage/prod.
+# -----------------------------------------------------------------------------
+
+resource "azurerm_role_assignment" "developer_openai" {
+  count = var.environment == "dev" && var.developer_object_id != null ? 1 : 0
+
+  scope                = azurerm_cognitive_account.openai.id
+  role_definition_name = "Cognitive Services OpenAI User"
+  principal_id         = var.developer_object_id
+  principal_type       = "User"
+}
+
+resource "azurerm_role_assignment" "developer_search" {
+  count = var.environment == "dev" && var.developer_object_id != null ? 1 : 0
+
+  scope                = azurerm_search_service.this.id
+  role_definition_name = "Search Index Data Contributor"
+  principal_id         = var.developer_object_id
+  principal_type       = "User"
+}
+
+resource "azurerm_role_assignment" "developer_content_safety" {
+  count = var.environment == "dev" && var.developer_object_id != null ? 1 : 0
+
+  scope                = azurerm_cognitive_account.content_safety.id
+  role_definition_name = "Cognitive Services User"
+  principal_id         = var.developer_object_id
+  principal_type       = "User"
 }
 
 # -----------------------------------------------------------------------------
