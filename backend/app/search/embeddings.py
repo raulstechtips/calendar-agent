@@ -234,15 +234,29 @@ async def process_events(user_id: str, events: list[dict[str, Any]]) -> list[str
         ids = await upsert_documents(user_id, documents)
         all_ids.extend(ids)
 
-        if len(ids) < len(batch_events):
-            logger.warning(
-                "Batch %d/%d: %d/%d upserts failed for user %s",
-                batch_num,
-                total_batches,
-                len(batch_events) - len(ids),
-                len(batch_events),
-                user_id,
-            )
+        # Retry any documents that failed to upsert (partial success / HTTP 207)
+        if len(ids) < len(documents):
+            succeeded_set = set(ids)
+            failed_docs = [d for d in documents if d["id"] not in succeeded_set]
+            retry_delay = settings.embedding_retry_initial_delay
+            for _retry in range(settings.embedding_max_retries):
+                if not failed_docs:
+                    break
+                await asyncio.sleep(retry_delay)
+                retry_ids = await upsert_documents(user_id, failed_docs)
+                all_ids.extend(retry_ids)
+                retried_set = set(retry_ids)
+                failed_docs = [d for d in failed_docs if d["id"] not in retried_set]
+                retry_delay *= 2
+            if failed_docs:
+                logger.warning(
+                    "Batch %d/%d: %d documents failed after retries for user %s: %s",
+                    batch_num,
+                    total_batches,
+                    len(failed_docs),
+                    user_id,
+                    [d["id"] for d in failed_docs],
+                )
 
         logger.info(
             "Batch %d/%d: embedded %d events for user %s",

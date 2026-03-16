@@ -856,6 +856,101 @@ class TestEmbedWithRetry:
 
 
 # ---------------------------------------------------------------------------
+# process_events — partial upsert retry
+# ---------------------------------------------------------------------------
+
+
+class TestProcessEventsPartialUpsertRetry:
+    @pytest.fixture(autouse=True)
+    def _reset(self) -> None:
+        from app.search.embeddings import reset_embeddings_client
+
+        reset_embeddings_client()
+
+    @patch("app.search.embeddings.upsert_documents", new_callable=AsyncMock)
+    @patch("app.search.embeddings.get_embeddings_client")
+    @patch("app.search.embeddings.settings")
+    @patch("asyncio.sleep", new_callable=AsyncMock)
+    async def test_should_retry_partially_failed_upserts(
+        self,
+        mock_sleep: AsyncMock,
+        mock_settings: MagicMock,
+        mock_get_client: MagicMock,
+        mock_upsert: AsyncMock,
+    ) -> None:
+        from app.search.embeddings import process_events
+
+        mock_settings.embedding_batch_size = 50
+        mock_settings.embedding_batch_delay = 1.0
+        mock_settings.embedding_max_retries = 3
+        mock_settings.embedding_retry_initial_delay = 1.0
+        mock_settings.embedding_max_text_length = 5000
+
+        mock_client = AsyncMock()
+        mock_client.aembed_documents = AsyncMock(return_value=[[0.1] * 1536] * 3)
+        mock_get_client.return_value = mock_client
+
+        # First upsert: 2/3 succeed; retry: remaining 1 succeeds
+        mock_upsert.side_effect = [
+            ["evt-1", "evt-2"],  # initial: evt-3 failed
+            ["evt-3"],  # retry: evt-3 succeeds
+        ]
+
+        events = [_make_event(event_id=f"evt-{i + 1}") for i in range(3)]
+        result = await process_events(user_id="user-123", events=events)
+
+        assert sorted(result) == ["evt-1", "evt-2", "evt-3"]
+        assert mock_upsert.await_count == 2
+
+        # Retry call should only contain the failed document
+        retry_call_docs = mock_upsert.call_args_list[1].args[1]
+        assert len(retry_call_docs) == 1
+        assert retry_call_docs[0]["id"] == "evt-3"
+
+    @patch("app.search.embeddings.upsert_documents", new_callable=AsyncMock)
+    @patch("app.search.embeddings.get_embeddings_client")
+    @patch("app.search.embeddings.settings")
+    @patch("asyncio.sleep", new_callable=AsyncMock)
+    async def test_should_give_up_after_max_retries_for_failed_upserts(
+        self,
+        mock_sleep: AsyncMock,
+        mock_settings: MagicMock,
+        mock_get_client: MagicMock,
+        mock_upsert: AsyncMock,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        from app.search.embeddings import process_events
+
+        mock_settings.embedding_batch_size = 50
+        mock_settings.embedding_batch_delay = 1.0
+        mock_settings.embedding_max_retries = 3
+        mock_settings.embedding_retry_initial_delay = 1.0
+        mock_settings.embedding_max_text_length = 5000
+
+        mock_client = AsyncMock()
+        mock_client.aembed_documents = AsyncMock(return_value=[[0.1] * 1536] * 3)
+        mock_get_client.return_value = mock_client
+
+        # Initial: evt-3 fails; all retries also fail
+        mock_upsert.side_effect = [
+            ["evt-1", "evt-2"],  # initial
+            [],  # retry 1
+            [],  # retry 2
+            [],  # retry 3
+        ]
+
+        events = [_make_event(event_id=f"evt-{i + 1}") for i in range(3)]
+        with caplog.at_level(logging.WARNING):
+            result = await process_events(user_id="user-123", events=events)
+
+        assert result == ["evt-1", "evt-2"]
+        # 1 initial + 3 retries
+        assert mock_upsert.await_count == 4
+        assert "failed after retries" in caplog.text
+        assert "evt-3" in caplog.text
+
+
+# ---------------------------------------------------------------------------
 # format_event_text — truncation
 # ---------------------------------------------------------------------------
 
