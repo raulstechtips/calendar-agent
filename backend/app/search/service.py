@@ -77,6 +77,10 @@ async def search(
         query_vector: Optional embedding vector for vector search.
         source_type: Optional filter by source type (event, email, contact).
         top: Maximum number of results to return.
+
+    Raises:
+        ValueError: If user_id is empty.
+        Exception: Propagates Azure SDK errors to the caller.
     """
     _validate_user_id(user_id)
 
@@ -97,17 +101,13 @@ async def search(
         ]
 
     client = get_search_client()
-    try:
-        results = await client.search(
-            search_text=query_text,
-            filter=filter_expression,
-            vector_queries=vector_queries,
-            top=top,
-        )
-        return [dict(result) async for result in results]
-    except Exception:
-        logger.exception("Search query failed for user %s", user_id)
-        return []
+    results = await client.search(
+        search_text=query_text,
+        filter=filter_expression,
+        vector_queries=vector_queries,
+        top=top,
+    )
+    return [dict(result) async for result in results]
 
 
 async def upsert_documents(user_id: str, documents: list[dict[str, Any]]) -> list[str]:
