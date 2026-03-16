@@ -14,7 +14,7 @@ resource "azurerm_cognitive_account" "openai" {
 
   network_acls {
     default_action = "Deny"
-    ip_rules       = var.deployer_ip_cidrs
+    ip_rules       = [for cidr in var.deployer_ip_cidrs : split("/", cidr)[0]]
   }
 
   tags = var.common_tags
@@ -31,7 +31,7 @@ resource "azurerm_cognitive_deployment" "gpt_4o" {
   }
 
   sku {
-    name     = "GlobalStandard"
+    name     = "Standard"
     capacity = 10
   }
 }
@@ -86,7 +86,7 @@ resource "azurerm_cognitive_account" "content_safety" {
 
   network_acls {
     default_action = "Deny"
-    ip_rules       = var.deployer_ip_cidrs
+    ip_rules       = [for cidr in var.deployer_ip_cidrs : split("/", cidr)[0]]
   }
 
   tags = var.common_tags
