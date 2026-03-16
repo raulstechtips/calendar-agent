@@ -14,14 +14,12 @@ class Settings(BaseSettings):
     # Azure Managed Identity (optional — only needed in prod for User Assigned Identity)
     azure_managed_identity_client_id: str = ""
 
-    # Azure AI Search
+    # Azure AI Search — no API key; uses DefaultAzureCredential
     azure_search_endpoint: str = ""
-    azure_search_key: str = ""
     azure_search_index: str = "calendar-context"
 
-    # Azure AI Content Safety
+    # Azure AI Content Safety — no API key; uses DefaultAzureCredential
     azure_content_safety_endpoint: str = ""
-    azure_content_safety_key: str = ""
 
     # Redis
     redis_url: str = "redis://localhost:6379/0"
