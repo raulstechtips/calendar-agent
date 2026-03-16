@@ -36,6 +36,17 @@ logger = logging.getLogger(__name__)
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 _GOOGLE_TIMEOUT = 10
 
+# Per-user lock to prevent concurrent token refreshes (single-instance only;
+# multi-instance deployments would need a Redis-based distributed lock).
+_refresh_locks: dict[str, asyncio.Lock] = {}
+
+
+def _get_refresh_lock(user_id: str) -> asyncio.Lock:
+    """Return the per-user refresh lock, creating it if needed."""
+    if user_id not in _refresh_locks:
+        _refresh_locks[user_id] = asyncio.Lock()
+    return _refresh_locks[user_id]
+
 
 # ---------------------------------------------------------------------------
 # Credential helpers
@@ -125,12 +136,20 @@ async def _get_credentials(user_id: str) -> Credentials | str:
     except TokenEncryptionError:
         return "Failed to retrieve Google token — please re-authenticate."
 
-    # Refresh if expired (with 60s buffer)
+    # Refresh if expired (with 60s buffer), using a per-user lock
+    # to prevent concurrent refreshes from racing on the same token
     if stored.expires_at < int(time.time()) + 60:
-        result = await _refresh_token_for_tool(user_id, stored)
-        if isinstance(result, str):
-            return result
-        stored = result
+        async with _get_refresh_lock(user_id):
+            # Re-check after acquiring lock — another coroutine may have refreshed
+            try:
+                stored = await get_token(user_id)
+            except (TokenNotFoundError, TokenEncryptionError):
+                return "Token became unavailable during refresh."
+            if stored.expires_at < int(time.time()) + 60:
+                result = await _refresh_token_for_tool(user_id, stored)
+                if isinstance(result, str):
+                    return result
+                stored = result
 
     return Credentials(  # type: ignore[no-untyped-call]
         token=stored.access_token,
@@ -421,8 +440,8 @@ async def update_event(
     Args:
         event_id: The ID of the event to update (from search_events).
         summary: New title for the event.
-        start_datetime: New start in 'YYYY-MM-DD HH:MM:SS' or 'YYYY-MM-DD'.
-        end_datetime: New end in 'YYYY-MM-DD HH:MM:SS' or 'YYYY-MM-DD'.
+        start_datetime: New start time. Both start and end required.
+        end_datetime: New end time. Both start and end required.
         timezone: IANA timezone for the new times.
         description: New event description.
         location: New event location.

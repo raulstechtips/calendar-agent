@@ -115,6 +115,22 @@ class TestGetCredentials:
             assert not isinstance(result, str)
             assert result.token == "refreshed-access-token"
 
+    async def test_should_skip_refresh_if_another_coroutine_already_refreshed(
+        self,
+    ) -> None:
+        expired_token = _make_stored_token(expired=True)
+        fresh_token = _make_stored_token(access_token="already-refreshed")
+
+        # First call returns expired, second call (inside lock) returns fresh
+        with patch(
+            "app.agents.tools.calendar_tools.get_token",
+            new_callable=AsyncMock,
+            side_effect=[expired_token, fresh_token],
+        ):
+            result = await _get_credentials(FAKE_USER_ID)
+            assert not isinstance(result, str)
+            assert result.token == "already-refreshed"
+
     async def test_should_return_error_when_refresh_fails(self) -> None:
         expired_token = _make_stored_token(expired=True)
 
