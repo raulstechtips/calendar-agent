@@ -1,3 +1,4 @@
+import { SessionProvider } from "next-auth/react";
 import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -70,7 +71,15 @@ export default async function MainLayout({
           </form>
         </div>
       </aside>
-      <main className="flex-1">{children}</main>
+      <main className="flex-1">
+        <SessionProvider
+          session={session}
+          refetchInterval={5 * 60}
+          refetchOnWindowFocus={true}
+        >
+          {children}
+        </SessionProvider>
+      </main>
     </div>
   );
 }
