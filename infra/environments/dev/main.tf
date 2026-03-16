@@ -147,3 +147,22 @@ resource "azurerm_key_vault_secret" "canary_token" {
 
   depends_on = [module.key_vault]
 }
+
+# -----------------------------------------------------------------------------
+# Redis — Azure Cache for Redis (token + session storage)
+# -----------------------------------------------------------------------------
+
+module "redis" {
+  source = "../../modules/redis"
+
+  resource_group_name = azurerm_resource_group.this.name
+  location            = azurerm_resource_group.this.location
+  name_suffix         = local.name_suffix
+  common_tags         = local.common_tags
+
+  key_vault_id                = module.key_vault.key_vault_id
+  private_endpoints_subnet_id = module.networking.private_endpoints_subnet_id
+  redis_dns_zone_id           = module.networking.dns_zone_ids["redis"]
+
+  depends_on = [module.key_vault]
+}
