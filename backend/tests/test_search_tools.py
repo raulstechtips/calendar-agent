@@ -6,6 +6,8 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from pydantic import BaseModel
+
 from app.agents.tools.search_tools import (
     _compute_recency_factor,  # pyright: ignore[reportPrivateUsage]
     _format_results,  # pyright: ignore[reportPrivateUsage]
@@ -98,7 +100,6 @@ class TestFormatResults:
             {
                 "content": "Team standup with Engineering",
                 "timestamp": "2026-03-15T09:00:00Z",
-                "source_type": "event",
             }
         ]
         formatted = _format_results(results)
@@ -110,12 +111,10 @@ class TestFormatResults:
             {
                 "content": "Event A",
                 "timestamp": "2026-03-15T09:00:00Z",
-                "source_type": "event",
             },
             {
                 "content": "Event B",
                 "timestamp": "2026-03-14T10:00:00Z",
-                "source_type": "event",
             },
         ]
         formatted = _format_results(results)
@@ -161,6 +160,7 @@ class TestSearchContext:
         call_kwargs = mock_search.call_args.kwargs
         assert call_kwargs["user_id"] == "user-123"
         assert call_kwargs["query_vector"] == [0.1] * 1536
+        assert call_kwargs["source_type"] == "event"
         assert isinstance(result, str)
         assert "Meeting with Alice" in result
 
@@ -242,6 +242,42 @@ class TestSearchContext:
         call_kwargs = mock_search.call_args.kwargs
         assert call_kwargs["top"] == 10
 
+    @patch("app.agents.tools.search_tools.search")
+    @patch("app.agents.tools.search_tools.get_embeddings_client")
+    async def test_should_clamp_top_to_minimum_of_1(
+        self,
+        mock_get_embed: MagicMock,
+        mock_search: AsyncMock,
+    ) -> None:
+        mock_client = MagicMock()
+        mock_client.aembed_query = AsyncMock(return_value=[0.1] * 1536)
+        mock_get_embed.return_value = mock_client
+        mock_search.return_value = []
+
+        await search_context.ainvoke(
+            {"query": "test", "top": 0, "user_id": "user-123"}
+        )
+
+        assert mock_search.call_args.kwargs["top"] == 1
+
+    @patch("app.agents.tools.search_tools.search")
+    @patch("app.agents.tools.search_tools.get_embeddings_client")
+    async def test_should_clamp_top_to_maximum_of_20(
+        self,
+        mock_get_embed: MagicMock,
+        mock_search: AsyncMock,
+    ) -> None:
+        mock_client = MagicMock()
+        mock_client.aembed_query = AsyncMock(return_value=[0.1] * 1536)
+        mock_get_embed.return_value = mock_client
+        mock_search.return_value = []
+
+        await search_context.ainvoke(
+            {"query": "test", "top": 100, "user_id": "user-123"}
+        )
+
+        assert mock_search.call_args.kwargs["top"] == 20
+
 
 class TestSearchToolsExport:
     def test_search_tools_list_contains_search_context(self) -> None:
@@ -249,11 +285,10 @@ class TestSearchToolsExport:
         assert search_tools[0] is search_context
 
     def test_search_context_has_injected_user_id(self) -> None:
-        # InjectedState params are excluded from the tool call schema
-        # that the LLM sees (filtering happens at agent binding time)
-        schema = search_context.get_input_schema().model_json_schema()
-        # user_id should be in the raw schema but marked for injection
-        assert "user_id" in schema.get("properties", {})
-        # query and top should also be present (LLM-visible params)
+        # tool_call_schema is the LLM-facing schema (InjectedState excluded)
+        tool_schema = search_context.tool_call_schema
+        assert isinstance(tool_schema, type) and issubclass(tool_schema, BaseModel)
+        schema = tool_schema.model_json_schema()
+        assert "user_id" not in schema.get("properties", {})
         assert "query" in schema.get("properties", {})
         assert "top" in schema.get("properties", {})

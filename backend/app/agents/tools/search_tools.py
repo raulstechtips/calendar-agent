@@ -77,9 +77,6 @@ def _format_results(results: list[dict[str, Any]]) -> str:
         timestamp = result.get("timestamp")
         if timestamp:
             lines.append(f"When: {timestamp}")
-        source_type = result.get("source_type")
-        if source_type:
-            lines.append(f"Source: {source_type}")
         blocks.append("\n".join(lines))
 
     return "\n\n".join(blocks)
@@ -116,6 +113,7 @@ async def search_context(
             user_id=user_id,
             query_text=query,
             query_vector=query_vector,
+            source_type="event",
             top=top,
         )
     except Exception as e:
