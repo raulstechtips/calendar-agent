@@ -1,10 +1,14 @@
-export default function ChatPage() {
-  return (
-    <div className="flex h-full flex-col items-center justify-center p-8">
-      <h1 className="text-2xl font-bold">Chat</h1>
-      <p className="mt-2 text-muted-foreground">
-        Chat interface coming soon.
-      </p>
-    </div>
-  );
+import { redirect } from "next/navigation";
+
+import { auth } from "../../../../auth";
+import ChatShell from "@/components/chat/ChatShell";
+
+export default async function ChatPage() {
+  const session = await auth();
+
+  if (!session?.idToken) {
+    redirect("/login");
+  }
+
+  return <ChatShell token={session.idToken} />;
 }
