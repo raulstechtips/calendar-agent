@@ -65,6 +65,7 @@ IMPORTANT: Follow these rules strictly:
 - `/pick-task [area]` — Find the next unblocked story to work on
 - `/sync-issues [area]` — Check issue status against actual code state
 - `/update-decision` — Record an architecture/product decision into SPEC.md and update affected issues
+- `/review-coderabbit [PR#]` — Fetch and triage CodeRabbit review comments on a PR
 
 ### Contextual Skills (Frontend)
 
