@@ -25,6 +25,11 @@ Fetch all CodeRabbit review comments from a GitHub PR, analyze them, and present
    ```bash
    gh api repos/{owner}/{repo}/pulls/<PR>/reviews --jq '.[] | select(.user.login == "coderabbitai" or .user.login == "coderabbit-ai[bot]" or (.user.login | test("coderabbit"; "i"))) | {id: .id, body: .body, state: .state}'
    ```
+   Also fetch issue-level comments (where CodeRabbit posts nitpicks and the walkthrough summary):
+   ```bash
+   gh api repos/{owner}/{repo}/issues/<PR>/comments --paginate --jq '.[] | select(.user.login == "coderabbitai" or .user.login == "coderabbit-ai[bot]" or (.user.login | test("coderabbit"; "i"))) | {id: .id, body: .body, created: .created_at}'
+   ```
+   Parse these for individual nitpick items — CodeRabbit often embeds multiple nitpicks in a single comment body using headers or bullet lists.
 
 3. **If no CodeRabbit comments found**, report that and stop.
 
@@ -34,7 +39,8 @@ Fetch all CodeRabbit review comments from a GitHub PR, analyze them, and present
    - **VALID — Must Fix**: The comment identifies a real bug, security issue, or spec violation. Action is required.
    - **VALID — Should Fix**: The comment is correct and improves quality, but isn't blocking.
    - **VALID — Consider**: A reasonable suggestion but debatable or low-impact.
-   - **NOISE — Dismiss**: The comment is incorrect, outdated, stylistic nitpick already handled by linters, or not applicable to this codebase.
+   - **NITPICK**: Minor style, naming, or readability suggestions from CodeRabbit's nitpick section. Evaluate whether each is genuinely useful for this codebase or already covered by linters.
+   - **NOISE — Dismiss**: The comment is incorrect, outdated, duplicates a linter rule, or not applicable to this codebase.
 
 6. **For each VALID comment**, explain:
    - What CodeRabbit flagged and why it matters (or doesn't)
@@ -46,7 +52,7 @@ Fetch all CodeRabbit review comments from a GitHub PR, analyze them, and present
    ```
    ## CodeRabbit Review Analysis — PR #<number>
 
-   **Summary**: X comments total — Y must-fix, Z should-fix, W consider, N noise
+   **Summary**: X comments total — Y must-fix, Z should-fix, W consider, P nitpicks, N noise
 
    ### Must Fix
    - **[path:line]** — <description of issue and recommended fix>
@@ -56,6 +62,9 @@ Fetch all CodeRabbit review comments from a GitHub PR, analyze them, and present
 
    ### Consider
    - **[path:line]** — <description and trade-off>
+
+   ### Nitpicks
+   - **[path:line]** — <nitpick and whether it's worth addressing>
 
    ### Dismissed
    - **[path:line]** — <why this is noise>
