@@ -1,7 +1,6 @@
 """Fernet-encrypted OAuth token storage in Redis."""
 
 import json
-import time
 
 from cryptography.fernet import Fernet, InvalidToken
 from pydantic import BaseModel
@@ -18,7 +17,7 @@ class TokenEncryptionError(Exception):
     """Raised when Fernet key is missing/invalid or decryption fails."""
 
 
-_FALLBACK_TTL = 60
+_TOKEN_TTL = 60 * 60 * 24 * 7  # 7 days — decoupled from access token expiry
 
 
 class StoredToken(BaseModel):
@@ -74,8 +73,7 @@ async def store_token(user_id: str, token_data: StoredToken) -> None:
 
     await redis.hset(key, mapping=mapping)  # type: ignore[misc]
 
-    ttl = token_data.expires_at - int(time.time()) - 300
-    await redis.expire(key, ttl if ttl > 0 else _FALLBACK_TTL)
+    await redis.expire(key, _TOKEN_TTL)
 
 
 async def get_token(user_id: str) -> StoredToken:
