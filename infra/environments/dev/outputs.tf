@@ -115,3 +115,25 @@ output "shared_identity_client_id" {
   description = "Client ID of the shared User Assigned Managed Identity"
   value       = module.key_vault.identity_client_id
 }
+
+# --- Container Apps ---
+
+output "container_app_environment_id" {
+  description = "Resource ID of the Container Apps Environment"
+  value       = module.container_apps.container_app_environment_id
+}
+
+output "frontend_url" {
+  description = "Full HTTPS URL of the frontend Container App"
+  value       = module.container_apps.frontend_url
+}
+
+output "backend_url" {
+  description = "Full HTTPS URL of the backend Container App (internal)"
+  value       = module.container_apps.backend_url
+}
+
+output "acr_login_server" {
+  description = "Login server URL of the Azure Container Registry"
+  value       = module.container_apps.acr_login_server
+}
