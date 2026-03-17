@@ -21,33 +21,25 @@ async def client() -> AsyncGenerator[httpx.AsyncClient, None]:
 
 class TestHealthEndpoint:
     async def test_health_returns_ok(self, client: httpx.AsyncClient) -> None:
-        mock_redis = AsyncMock()
-        mock_redis.ping.return_value = True
-        with patch("app.main.get_redis", return_value=mock_redis):
-            response = await client.get("/health")
+        response = await client.get("/health")
         assert response.status_code == 200
         assert response.json()["status"] == "ok"
 
     async def test_health_returns_json_content_type(
         self, client: httpx.AsyncClient
     ) -> None:
-        mock_redis = AsyncMock()
-        mock_redis.ping.return_value = True
-        with patch("app.main.get_redis", return_value=mock_redis):
-            response = await client.get("/health")
+        response = await client.get("/health")
         assert "application/json" in response.headers["content-type"]
 
-    async def test_health_returns_503_when_redis_down(
+    async def test_health_returns_ok_even_when_redis_down(
         self, client: httpx.AsyncClient
     ) -> None:
         mock_redis = AsyncMock()
         mock_redis.ping.side_effect = ConnectionError("Redis unavailable")
         with patch("app.main.get_redis", return_value=mock_redis):
             response = await client.get("/health")
-        assert response.status_code == 503
-        body = response.json()
-        assert body["status"] == "degraded"
-        assert body["redis"] == "error"
+        assert response.status_code == 200
+        assert response.json()["status"] == "ok"
 
 
 class TestGoogleTransportCleanup:

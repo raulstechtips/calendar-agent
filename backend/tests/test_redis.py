@@ -64,32 +64,32 @@ class TestRedisClient:
         assert client.connection_pool.connection_class is Connection
 
 
-class TestHealthEndpointWithRedis:
-    async def test_health_includes_redis_status_ok(
+class TestReadinessEndpointWithRedis:
+    async def test_ready_includes_redis_status_ok(
         self, client: httpx.AsyncClient
     ) -> None:
         mock_redis = AsyncMock()
         mock_redis.ping.return_value = True
 
         with patch("app.main.get_redis", return_value=mock_redis):
-            response = await client.get("/health")
+            response = await client.get("/ready")
 
         assert response.status_code == 200
         data = response.json()
         assert data["redis"] == "ok"
 
-    async def test_health_includes_redis_status_error(
+    async def test_ready_includes_redis_status_error(
         self, client: httpx.AsyncClient
     ) -> None:
         mock_redis = AsyncMock()
         mock_redis.ping.side_effect = ConnectionError("Connection refused")
 
         with patch("app.main.get_redis", return_value=mock_redis):
-            response = await client.get("/health")
+            response = await client.get("/ready")
 
         assert response.status_code == 503
         data = response.json()
-        assert data["status"] == "degraded"
+        assert data["status"] == "not_ready"
         assert data["redis"] == "error"
 
 

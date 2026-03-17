@@ -62,16 +62,19 @@ app.include_router(users_router)
 
 @app.get("/health")
 async def health() -> JSONResponse:
-    """Return service health status including Redis connectivity."""
-    redis_status = "ok"
+    """Liveness probe — confirms the process can serve HTTP."""
+    return JSONResponse(content={"status": "ok"})
+
+
+@app.get("/ready")
+async def readiness() -> JSONResponse:
+    """Readiness probe — checks dependency connectivity."""
     try:
         await get_redis().ping()  # type: ignore[misc]
     except Exception:
-        logger.warning("Redis health check failed", exc_info=True)
-        redis_status = "error"
-
-    healthy = redis_status == "ok"
-    return JSONResponse(
-        content={"status": "ok" if healthy else "degraded", "redis": redis_status},
-        status_code=200 if healthy else 503,
-    )
+        logger.warning("Readiness check failed: Redis unreachable", exc_info=True)
+        return JSONResponse(
+            content={"status": "not_ready", "redis": "error"},
+            status_code=503,
+        )
+    return JSONResponse(content={"status": "ready", "redis": "ok"})
