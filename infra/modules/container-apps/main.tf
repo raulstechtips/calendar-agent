@@ -105,6 +105,10 @@ resource "azurerm_container_app_environment" "this" {
   }
 
   tags = var.common_tags
+
+  lifecycle {
+    ignore_changes = [infrastructure_resource_group_name]
+  }
 }
 
 # -----------------------------------------------------------------------------
