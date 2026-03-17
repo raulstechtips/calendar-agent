@@ -16,8 +16,12 @@ const SCOPE_LABELS: Record<string, ScopeInfo> = {
   email: { label: "Email", description: "View your email address" },
   profile: { label: "Profile", description: "View your basic profile info" },
   "https://www.googleapis.com/auth/calendar.events": {
-    label: "Google Calendar",
+    label: "Calendar Events",
     description: "Read and write calendar events",
+  },
+  "https://www.googleapis.com/auth/calendar.readonly": {
+    label: "Calendar Metadata",
+    description: "Read calendar list and settings",
   },
   "https://www.googleapis.com/auth/gmail.metadata": {
     label: "Gmail Metadata",
@@ -32,7 +36,8 @@ interface RequestableScope {
 
 const REQUESTABLE_SCOPES: RequestableScope[] = [
   {
-    scope: "https://www.googleapis.com/auth/calendar.events",
+    scope:
+      "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly",
     buttonLabel: "Grant Calendar Access",
   },
   {
@@ -49,7 +54,7 @@ export function ScopeManager({ scopes }: ScopeManagerProps) {
   const scopeSet = new Set(scopes);
 
   const ungrantedScopes = REQUESTABLE_SCOPES.filter(
-    (rs) => !scopeSet.has(rs.scope),
+    (rs) => !rs.scope.split(" ").every((s) => scopeSet.has(s)),
   );
 
   function handleGrant(scope: string) {

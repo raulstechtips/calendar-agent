@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.agents.calendar_agent import build_thread_id, get_agent
 from app.agents.guardrails import check_canary_leak
-from app.agents.tools.calendar_tools import CALENDAR_SCOPE, SCOPE_ERROR_SENTINEL
+from app.agents.tools.calendar_tools import CALENDAR_EVENTS_SCOPE, SCOPE_ERROR_SENTINEL
 from app.auth.dependencies import get_current_user
 from app.core.config import settings
 from app.users.schemas import UserResponse
@@ -104,7 +104,7 @@ async def _stream_response(
                 )
                 scope_event: dict[str, Any] = {
                     "type": "scope_required",
-                    "scope": CALENDAR_SCOPE,
+                    "scope": CALENDAR_EVENTS_SCOPE,
                 }
                 yield f"data: {json.dumps(scope_event)}\n\n"
                 scope_done: dict[str, Any] = {

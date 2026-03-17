@@ -72,7 +72,7 @@ export default function ChatShell() {
             { redirectTo: "/chat" },
             {
               scope:
-                "openid email profile https://www.googleapis.com/auth/calendar.events",
+                "openid email profile https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly",
             },
           );
         }}

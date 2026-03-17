@@ -35,8 +35,10 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
-CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events"
-SCOPE_ERROR_SENTINEL = "##SCOPE_REQUIRED##calendar.events"
+CALENDAR_EVENTS_SCOPE = "https://www.googleapis.com/auth/calendar.events"
+CALENDAR_READONLY_SCOPE = "https://www.googleapis.com/auth/calendar.readonly"
+CALENDAR_SCOPES = frozenset({CALENDAR_EVENTS_SCOPE, CALENDAR_READONLY_SCOPE})
+SCOPE_ERROR_SENTINEL = "##SCOPE_REQUIRED##calendar"
 _GOOGLE_TIMEOUT = 10
 
 # Per-user lock to prevent concurrent token refreshes (single-instance only;
@@ -180,7 +182,7 @@ async def _build_service(user_id: str) -> Any | str:
     # Pre-check: verify calendar scope before making a doomed API call
     try:
         stored = await get_token(user_id)
-        if CALENDAR_SCOPE not in stored.scopes:
+        if CALENDAR_EVENTS_SCOPE not in stored.scopes:
             logger.warning(
                 "User %s missing calendar scope. Stored scopes: %s",
                 user_id,

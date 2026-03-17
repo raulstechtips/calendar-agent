@@ -8,6 +8,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.agents.tools.calendar_tools import (
+    CALENDAR_EVENTS_SCOPE,
+    CALENDAR_READONLY_SCOPE,
     SCOPE_ERROR_SENTINEL,
     _build_service,  # pyright: ignore[reportPrivateUsage]
     _get_credentials,  # pyright: ignore[reportPrivateUsage]
@@ -37,7 +39,7 @@ def _make_stored_token(
         access_token=access_token,
         refresh_token="valid-refresh-token",
         expires_at=int(time.time()) - 100 if expired else int(time.time()) + 3600,
-        scopes=["https://www.googleapis.com/auth/calendar.events"],
+        scopes=[CALENDAR_EVENTS_SCOPE, CALENDAR_READONLY_SCOPE],
     )
 
 
@@ -197,7 +199,11 @@ class TestRefreshTokenForTool:
         mock_response.json.return_value = {
             "access_token": "new-access-token",
             "expires_in": 3600,
-            "scope": "openid email profile https://www.googleapis.com/auth/calendar.events",
+            "scope": (
+                "openid email profile"
+                " https://www.googleapis.com/auth/calendar.events"
+                " https://www.googleapis.com/auth/calendar.readonly"
+            ),
         }
 
         with (
@@ -217,6 +223,7 @@ class TestRefreshTokenForTool:
                 "email",
                 "profile",
                 "https://www.googleapis.com/auth/calendar.events",
+                "https://www.googleapis.com/auth/calendar.readonly",
             ]
             mock_store.assert_called_once()
 
@@ -345,9 +352,7 @@ class TestHttpErrorDetection:
             new_callable=AsyncMock,
             return_value=service,
         ):
-            result = await get_current_datetime.ainvoke(
-                {"user_id": FAKE_USER_ID}
-            )
+            result = await get_current_datetime.ainvoke({"user_id": FAKE_USER_ID})
             assert result == SCOPE_ERROR_SENTINEL
 
     async def test_should_propagate_non_permission_http_errors(self) -> None:
@@ -360,9 +365,7 @@ class TestHttpErrorDetection:
             new_callable=AsyncMock,
             return_value=service,
         ):
-            result = await get_current_datetime.ainvoke(
-                {"user_id": FAKE_USER_ID}
-            )
+            result = await get_current_datetime.ainvoke({"user_id": FAKE_USER_ID})
             assert isinstance(result, str)
             assert result != SCOPE_ERROR_SENTINEL
             assert "Failed" in result

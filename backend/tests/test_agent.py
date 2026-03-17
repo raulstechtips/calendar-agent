@@ -28,7 +28,7 @@ from app.agents.prompts import (
     get_system_instructions,
 )
 from app.agents.state import AgentState
-from app.agents.tools.calendar_tools import CALENDAR_SCOPE, SCOPE_ERROR_SENTINEL
+from app.agents.tools.calendar_tools import CALENDAR_EVENTS_SCOPE, SCOPE_ERROR_SENTINEL
 from app.auth.dependencies import get_current_user
 from app.main import app
 from app.users.schemas import UserResponse
@@ -511,7 +511,7 @@ class TestChatEndpoint:
         # Second event: scope_required with scope field
         scope_events = [e for e in events if e["type"] == "scope_required"]
         assert len(scope_events) == 1
-        assert scope_events[0]["scope"] == CALENDAR_SCOPE
+        assert scope_events[0]["scope"] == CALENDAR_EVENTS_SCOPE
 
         # Last event: done (no error events)
         assert events[-1]["type"] == "done"
