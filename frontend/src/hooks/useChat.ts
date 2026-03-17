@@ -7,6 +7,7 @@ import {
   type ChatMessage,
   type ChatSSEEvent,
   type PendingConfirmation,
+  type ScopeRequired,
   streamChat,
 } from "@/lib/chat-stream";
 
@@ -20,6 +21,7 @@ interface ChatState {
   isStreaming: boolean;
   error: string | null;
   pendingConfirmation: PendingConfirmation | null;
+  scopeRequired: ScopeRequired | null;
 }
 
 const initialState: ChatState = {
@@ -28,6 +30,7 @@ const initialState: ChatState = {
   isStreaming: false,
   error: null,
   pendingConfirmation: null,
+  scopeRequired: null,
 };
 
 // ---------------------------------------------------------------------------
@@ -42,7 +45,9 @@ type ChatAction =
   | { type: "BLOCKED"; content: string }
   | { type: "CONFIRMATION_RECEIVED"; confirmation: PendingConfirmation }
   | { type: "CONFIRMATION_RESOLVED" }
-  | { type: "CLEAR_ERROR" };
+  | { type: "CLEAR_ERROR" }
+  | { type: "SCOPE_REQUIRED"; scopeRequired: ScopeRequired }
+  | { type: "CLEAR_SCOPE_REQUIRED" };
 
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
   switch (action.type) {
@@ -94,6 +99,12 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case "CLEAR_ERROR":
       return { ...state, error: null };
 
+    case "SCOPE_REQUIRED":
+      return { ...state, scopeRequired: action.scopeRequired, isStreaming: false };
+
+    case "CLEAR_SCOPE_REQUIRED":
+      return { ...state, scopeRequired: null };
+
     default:
       return state;
   }
@@ -109,9 +120,11 @@ export interface UseChatReturn {
   isStreaming: boolean;
   error: string | null;
   pendingConfirmation: PendingConfirmation | null;
+  scopeRequired: ScopeRequired | null;
   sendMessage: (text: string) => Promise<void>;
   confirmAction: (actionId: string, approved: boolean) => Promise<void>;
   clearError: () => void;
+  clearScopeRequired: () => void;
 }
 
 /** Chat state management hook with SSE streaming. */
@@ -197,15 +210,21 @@ export function useChat(token: string): UseChatReturn {
     dispatch({ type: "CLEAR_ERROR" });
   }, []);
 
+  const clearScopeRequired = useCallback(() => {
+    dispatch({ type: "CLEAR_SCOPE_REQUIRED" });
+  }, []);
+
   return {
     messages: state.messages,
     threadId: state.threadId,
     isStreaming: state.isStreaming,
     error: state.error,
     pendingConfirmation: state.pendingConfirmation,
+    scopeRequired: state.scopeRequired,
     sendMessage,
     confirmAction,
     clearError,
+    clearScopeRequired,
   };
 }
 
@@ -238,6 +257,12 @@ function handleEvent(
           action: event.action,
           details: event.details,
         },
+      });
+      break;
+    case "scope_required":
+      dispatch({
+        type: "SCOPE_REQUIRED",
+        scopeRequired: { scope: event.scope },
       });
       break;
   }

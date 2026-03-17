@@ -11,9 +11,13 @@ from langchain_core.language_models import GenericFakeChatModel
 from langchain_core.messages import (
     AIMessage,
     AIMessageChunk,
+    BaseMessage,
     HumanMessage,
     SystemMessage,
+    ToolMessage,
 )
+
+from app.agents.tools.calendar_tools import CALENDAR_SCOPE, SCOPE_ERROR_SENTINEL
 
 from app.agents.calendar_agent import (
     build_thread_id,
@@ -60,6 +64,18 @@ class ErrorAgent:
     ) -> AsyncGenerator[tuple[AIMessageChunk, dict[str, str]], None]:
         raise RuntimeError("LLM connection failed")
         yield  # type: ignore[unreachable]  # pragma: no cover
+
+
+class ScopeErrorAgent:
+    """Mock agent that yields a ToolMessage with scope error sentinel."""
+
+    async def astream(
+        self, *args: Any, **kwargs: Any
+    ) -> AsyncGenerator[tuple[BaseMessage, dict[str, str]], None]:
+        yield (
+            ToolMessage(content=SCOPE_ERROR_SENTINEL, tool_call_id="test-call"),
+            {"langgraph_node": "agent"},
+        )
 
 
 def _parse_sse_events(body: str) -> list[dict[str, Any]]:
@@ -476,3 +492,28 @@ class TestChatEndpoint:
             json={"message": "Hello", "extra": "bad"},
         )
         assert response.status_code == 422
+
+    async def test_should_emit_scope_required_event_on_scope_sentinel(
+        self, client: httpx.AsyncClient
+    ) -> None:
+        self._override_agent(ScopeErrorAgent())  # type: ignore[arg-type]
+        response = await client.post(
+            "/api/chat", json={"message": "What's on my calendar?"}
+        )
+
+        assert response.status_code == 200
+        events = _parse_sse_events(response.text)
+
+        # First event: hardcoded token with consent message
+        token_events = [e for e in events if e["type"] == "token"]
+        assert len(token_events) == 1
+        assert "calendar permissions" in token_events[0]["content"].lower()
+
+        # Second event: scope_required with scope field
+        scope_events = [e for e in events if e["type"] == "scope_required"]
+        assert len(scope_events) == 1
+        assert scope_events[0]["scope"] == CALENDAR_SCOPE
+
+        # Last event: done (no error events)
+        assert events[-1]["type"] == "done"
+        assert not any(e["type"] == "error" for e in events)
