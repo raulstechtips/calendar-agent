@@ -264,6 +264,7 @@ dependencies = [
     { name = "langchain-openai" },
     { name = "langgraph" },
     { name = "langgraph-prebuilt" },
+    { name = "pydantic-settings" },
     { name = "redis", extra = ["hiredis"] },
     { name = "slowapi" },
 ]
@@ -294,6 +295,7 @@ requires-dist = [
     { name = "langchain-openai", specifier = ">=1.1.10" },
     { name = "langgraph", specifier = ">=1.1.0" },
     { name = "langgraph-prebuilt", specifier = ">=1.0.8" },
+    { name = "pydantic-settings", specifier = ">=2.0" },
     { name = "redis", extras = ["hiredis"], specifier = ">=7.1.1" },
     { name = "slowapi", specifier = ">=0.1.9" },
 ]

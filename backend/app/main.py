@@ -5,8 +5,10 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 
 from app.agents.router import router as agents_router
+from app.auth.dependencies import close_google_transport
 from app.auth.router import router as auth_router
 from app.core.middleware import setup_middleware
 from app.core.redis import close_redis, get_redis
@@ -42,6 +44,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         close_embeddings_client()
     except Exception:
         logger.exception("Failed to close embeddings client")
+    try:
+        close_google_transport()
+    except Exception:
+        logger.exception("Failed to close Google auth transport")
 
 
 app = FastAPI(title="AI Calendar Assistant", lifespan=lifespan)
@@ -55,7 +61,7 @@ app.include_router(users_router)
 
 
 @app.get("/health")
-async def health() -> dict[str, str]:
+async def health() -> JSONResponse:
     """Return service health status including Redis connectivity."""
     redis_status = "ok"
     try:
@@ -63,4 +69,9 @@ async def health() -> dict[str, str]:
     except Exception:
         logger.warning("Redis health check failed", exc_info=True)
         redis_status = "error"
-    return {"status": "ok", "redis": redis_status}
+
+    healthy = redis_status == "ok"
+    return JSONResponse(
+        content={"status": "ok" if healthy else "degraded", "redis": redis_status},
+        status_code=200 if healthy else 503,
+    )
