@@ -208,3 +208,10 @@ variable "acr_sku" {
     error_message = "ACR SKU must be one of: Basic, Standard, Premium."
   }
 }
+
+# --- GitHub Actions OIDC ---
+
+variable "github_repo_name" {
+  description = "GitHub repository in org/repo format for OIDC federated credentials"
+  type        = string
+}

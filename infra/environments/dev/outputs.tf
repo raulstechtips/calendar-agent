@@ -137,3 +137,15 @@ output "acr_login_server" {
   description = "Login server URL of the Azure Container Registry"
   value       = module.container_apps.acr_login_server
 }
+
+# --- GitHub Actions ---
+
+output "github_actions_client_id" {
+  description = "Client ID for GitHub Actions OIDC (set as AZURE_CLIENT_ID in GitHub secrets)"
+  value       = module.container_apps.github_actions_client_id
+}
+
+output "github_actions_tenant_id" {
+  description = "Tenant ID for GitHub Actions OIDC (set as AZURE_TENANT_ID in GitHub secrets)"
+  value       = module.container_apps.github_actions_tenant_id
+}

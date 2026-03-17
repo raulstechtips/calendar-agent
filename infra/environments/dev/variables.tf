@@ -120,3 +120,10 @@ variable "canary_token" {
     error_message = "canary_token must be set to a real secret value, not a placeholder."
   }
 }
+
+# --- GitHub Actions ---
+
+variable "github_repo_name" {
+  description = "GitHub repository in org/repo format for OIDC federated credentials"
+  type        = string
+}
