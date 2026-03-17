@@ -42,17 +42,20 @@ class FakeToolChatModel(GenericFakeChatModel):
         return self
 
 
+_SubgraphChunk = tuple[tuple[str, ...], tuple[BaseMessage, dict[str, str]]]
+
+
 class FakeAgent:
-    """Mock agent that yields predefined chunks from astream."""
+    """Mock agent that yields predefined chunks in subgraphs=True format."""
 
     def __init__(self, chunks: list[tuple[AIMessageChunk, dict[str, str]]]) -> None:
         self._chunks = chunks
 
     async def astream(
         self, *args: Any, **kwargs: Any
-    ) -> AsyncGenerator[tuple[AIMessageChunk, dict[str, str]], None]:
+    ) -> AsyncGenerator[_SubgraphChunk, None]:
         for chunk in self._chunks:
-            yield chunk
+            yield ((), chunk)
 
 
 class ErrorAgent:
@@ -60,7 +63,7 @@ class ErrorAgent:
 
     async def astream(
         self, *args: Any, **kwargs: Any
-    ) -> AsyncGenerator[tuple[AIMessageChunk, dict[str, str]], None]:
+    ) -> AsyncGenerator[_SubgraphChunk, None]:
         raise RuntimeError("LLM connection failed")
         yield  # type: ignore[unreachable]  # pragma: no cover
 
@@ -70,10 +73,13 @@ class ScopeErrorAgent:
 
     async def astream(
         self, *args: Any, **kwargs: Any
-    ) -> AsyncGenerator[tuple[BaseMessage, dict[str, str]], None]:
+    ) -> AsyncGenerator[_SubgraphChunk, None]:
         yield (
-            ToolMessage(content=SCOPE_ERROR_SENTINEL, tool_call_id="test-call"),
-            {"langgraph_node": "agent"},
+            (),
+            (
+                ToolMessage(content=SCOPE_ERROR_SENTINEL, tool_call_id="test-call"),
+                {"langgraph_node": "agent"},
+            ),
         )
 
 
