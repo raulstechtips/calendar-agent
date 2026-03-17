@@ -135,19 +135,21 @@ describe("syncTokenToBackend", () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it("should retry once on non-ok response", async () => {
+  it("should retry up to 4 times on non-ok response", async () => {
     const mockFetch = vi
       .fn()
+      .mockResolvedValueOnce({ ok: false, status: 500 })
+      .mockResolvedValueOnce({ ok: false, status: 500 })
       .mockResolvedValueOnce({ ok: false, status: 500 })
       .mockResolvedValueOnce({ ok: true, status: 204 });
     vi.stubGlobal("fetch", mockFetch);
 
     await syncTokenToBackend(baseToken);
 
-    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(mockFetch).toHaveBeenCalledTimes(4);
   });
 
-  it("should retry once on network error", async () => {
+  it("should retry up to 4 times on network error", async () => {
     const mockFetch = vi
       .fn()
       .mockRejectedValueOnce(new Error("Network failure"))
@@ -159,22 +161,26 @@ describe("syncTokenToBackend", () => {
     expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 
-  it("should make exactly 2 calls when first returns non-ok and retry throws", async () => {
+  it("should make exactly 4 calls when all attempts fail", async () => {
     const mockFetch = vi
       .fn()
+      .mockResolvedValueOnce({ ok: false, status: 500 })
+      .mockResolvedValueOnce({ ok: false, status: 500 })
       .mockResolvedValueOnce({ ok: false, status: 500 })
       .mockRejectedValueOnce(new Error("Network failure"));
     vi.stubGlobal("fetch", mockFetch);
 
     await expect(syncTokenToBackend(baseToken)).resolves.toBeUndefined();
-    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(mockFetch).toHaveBeenCalledTimes(4);
   });
 
-  it("should not throw when retry also fails", async () => {
+  it("should not throw when all retries fail", async () => {
     const mockFetch = vi
       .fn()
-      .mockRejectedValueOnce(new Error("Network failure"))
-      .mockRejectedValueOnce(new Error("Network failure again"));
+      .mockRejectedValueOnce(new Error("Fail 1"))
+      .mockRejectedValueOnce(new Error("Fail 2"))
+      .mockRejectedValueOnce(new Error("Fail 3"))
+      .mockRejectedValueOnce(new Error("Fail 4"));
     vi.stubGlobal("fetch", mockFetch);
 
     await expect(syncTokenToBackend(baseToken)).resolves.toBeUndefined();

@@ -18,6 +18,7 @@ from zoneinfo import ZoneInfo
 import requests
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 from langchain_core.tools import tool
 from langgraph.prebuilt import InjectedState
 from langgraph.types import interrupt
@@ -34,6 +35,10 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+CALENDAR_EVENTS_SCOPE = "https://www.googleapis.com/auth/calendar.events"
+CALENDAR_READONLY_SCOPE = "https://www.googleapis.com/auth/calendar.readonly"
+CALENDAR_SCOPES = frozenset({CALENDAR_EVENTS_SCOPE, CALENDAR_READONLY_SCOPE})
+SCOPE_ERROR_SENTINEL = "##SCOPE_REQUIRED##calendar"
 _GOOGLE_TIMEOUT = 10
 
 # Per-user lock to prevent concurrent token refreshes (single-instance only;
@@ -103,6 +108,13 @@ async def _refresh_token_for_tool(
     new_expires_at = int(time.time()) + expires_in
     new_refresh_token = data.get("refresh_token")
 
+    # Use scopes from Google's response when available (self-correcting);
+    # fall back to stored scopes if Google omits the field.
+    scope_str = data.get("scope")
+    refreshed_scopes = (
+        scope_str.split() if isinstance(scope_str, str) and scope_str else stored.scopes
+    )
+
     updated = StoredToken(
         access_token=new_access_token,
         refresh_token=(
@@ -111,7 +123,7 @@ async def _refresh_token_for_tool(
             else stored.refresh_token
         ),
         expires_at=new_expires_at,
-        scopes=stored.scopes,
+        scopes=refreshed_scopes,
     )
 
     try:
@@ -163,8 +175,23 @@ async def _get_credentials(user_id: str) -> Credentials | str:
 async def _build_service(user_id: str) -> Any | str:
     """Build a Google Calendar API Resource for the given user.
 
-    Returns the Resource on success, or an error message string on failure.
+    Pre-checks that the stored token includes calendar scopes before
+    attempting the Google API call. Returns the Resource on success,
+    or an error message string on failure.
     """
+    # Pre-check: verify calendar scope before making a doomed API call
+    try:
+        stored = await get_token(user_id)
+        if CALENDAR_EVENTS_SCOPE not in stored.scopes:
+            logger.warning(
+                "User %s missing calendar scope. Stored scopes: %s",
+                user_id,
+                stored.scopes,
+            )
+            return SCOPE_ERROR_SENTINEL
+    except (TokenNotFoundError, TokenEncryptionError):
+        pass  # _get_credentials will handle with a proper error message
+
     creds = await _get_credentials(user_id)
     if isinstance(creds, str):
         return creds
@@ -174,6 +201,11 @@ async def _build_service(user_id: str) -> Any | str:
         None,
         partial(build, "calendar", "v3", credentials=creds),
     )
+
+
+def _is_insufficient_permissions(e: HttpError) -> bool:
+    """Check if an HttpError is a 403 insufficientPermissions response."""
+    return e.resp.status == 403 and b"insufficientPermissions" in (e.content or b"")
 
 
 # ---------------------------------------------------------------------------
@@ -200,6 +232,11 @@ async def get_current_datetime(
         tz = ZoneInfo(tz_name)
         now = datetime.now(tz)
         return f"Current datetime: {now.strftime('%Y-%m-%d %H:%M:%S')} ({tz_name})"
+    except HttpError as e:
+        if _is_insufficient_permissions(e):
+            logger.warning("403 insufficientPermissions for user %s", user_id)
+            return SCOPE_ERROR_SENTINEL
+        return f"Failed to get current datetime: {e}"
     except Exception as e:
         return f"Failed to get current datetime: {e}"
 
@@ -228,6 +265,11 @@ async def get_calendars_info(
             for item in result.get("items", [])
         ]
         return json.dumps(calendars)
+    except HttpError as e:
+        if _is_insufficient_permissions(e):
+            logger.warning("403 insufficientPermissions for user %s", user_id)
+            return SCOPE_ERROR_SENTINEL
+        return f"Failed to get calendars info: {e}"
     except Exception as e:
         return f"Failed to get calendars info: {e}"
 
@@ -317,6 +359,11 @@ async def search_events(
                         "htmlLink": event.get("htmlLink"),
                     }
                 )
+        except HttpError as e:
+            if _is_insufficient_permissions(e):
+                logger.warning("403 insufficientPermissions for user %s", user_id)
+                return SCOPE_ERROR_SENTINEL
+            logger.warning("Failed to list events for calendar %s: %s", cal_id, e)
         except Exception as e:
             logger.warning("Failed to list events for calendar %s: %s", cal_id, e)
 
@@ -419,6 +466,11 @@ async def create_event(
         )
         link = result.get("htmlLink", "success")
         return f"Event created: {result.get('summary', summary)} — {link}"
+    except HttpError as e:
+        if _is_insufficient_permissions(e):
+            logger.warning("403 insufficientPermissions for user %s", user_id)
+            return SCOPE_ERROR_SENTINEL
+        return f"Failed to create event: {e}"
     except Exception as e:
         return f"Failed to create event: {e}"
 
@@ -518,6 +570,11 @@ async def update_event(
         )
         link = result.get("htmlLink", "success")
         return f"Event updated: {result.get('summary', '')} — {link}"
+    except HttpError as e:
+        if _is_insufficient_permissions(e):
+            logger.warning("403 insufficientPermissions for user %s", user_id)
+            return SCOPE_ERROR_SENTINEL
+        return f"Failed to update event: {e}"
     except Exception as e:
         return f"Failed to update event: {e}"
 
@@ -556,6 +613,11 @@ async def delete_event(
             ),
         )
         return "Event deleted successfully."
+    except HttpError as e:
+        if _is_insufficient_permissions(e):
+            logger.warning("403 insufficientPermissions for user %s", user_id)
+            return SCOPE_ERROR_SENTINEL
+        return f"Failed to delete event: {e}"
     except Exception as e:
         return f"Failed to delete event: {e}"
 

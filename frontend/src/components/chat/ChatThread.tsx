@@ -3,25 +3,34 @@
 import { useCallback, useEffect, useRef } from "react";
 
 import { ScrollArea } from "@/components/ui/scroll-area";
-import type { ChatMessage as ChatMessageType, PendingConfirmation } from "@/lib/chat-stream";
+import type {
+  ChatMessage as ChatMessageType,
+  PendingConfirmation,
+  ScopeRequired,
+} from "@/lib/chat-stream";
 
 import ChatMessage from "./ChatMessage";
 import ConfirmationCard from "./ConfirmationCard";
+import ScopeRequiredCard from "./ScopeRequiredCard";
 
 interface ChatThreadProps {
   messages: ChatMessageType[];
   isStreaming: boolean;
   pendingConfirmation: PendingConfirmation | null;
+  scopeRequired: ScopeRequired | null;
   onApprove: () => void;
   onReject: () => void;
+  onGrantScope: () => void;
 }
 
 export default function ChatThread({
   messages,
   isStreaming,
   pendingConfirmation,
+  scopeRequired,
   onApprove,
   onReject,
+  onGrantScope,
 }: ChatThreadProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number>(0);
@@ -75,6 +84,7 @@ export default function ChatThread({
             onReject={onReject}
           />
         )}
+        {scopeRequired && <ScopeRequiredCard onGrant={onGrantScope} />}
         <div ref={bottomRef} />
       </div>
     </ScrollArea>

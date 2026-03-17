@@ -34,12 +34,18 @@ export interface ConfirmationEvent {
   details: Record<string, unknown>;
 }
 
+export interface ScopeRequiredEvent {
+  type: "scope_required";
+  scope: string;
+}
+
 export type ChatSSEEvent =
   | TokenEvent
   | DoneEvent
   | ErrorEvent
   | BlockedEvent
-  | ConfirmationEvent;
+  | ConfirmationEvent
+  | ScopeRequiredEvent;
 
 // ---------------------------------------------------------------------------
 // Chat message and state types (used by useChat and components)
@@ -55,6 +61,10 @@ export interface PendingConfirmation {
   actionId: string;
   action: string;
   details: Record<string, unknown>;
+}
+
+export interface ScopeRequired {
+  scope: string;
 }
 
 // ---------------------------------------------------------------------------

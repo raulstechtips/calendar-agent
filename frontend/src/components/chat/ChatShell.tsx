@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertCircle } from "lucide-react";
-import { useSession } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 
 import {
   Alert,
@@ -23,6 +23,7 @@ export default function ChatShell() {
     isStreaming,
     error,
     pendingConfirmation,
+    scopeRequired,
     sendMessage,
     confirmAction,
     clearError,
@@ -54,6 +55,7 @@ export default function ChatShell() {
         messages={messages}
         isStreaming={isStreaming}
         pendingConfirmation={pendingConfirmation}
+        scopeRequired={scopeRequired}
         onApprove={() => {
           if (pendingConfirmation) {
             void confirmAction(pendingConfirmation.actionId, true);
@@ -63,6 +65,16 @@ export default function ChatShell() {
           if (pendingConfirmation) {
             void confirmAction(pendingConfirmation.actionId, false);
           }
+        }}
+        onGrantScope={() => {
+          void signIn(
+            "google",
+            { redirectTo: "/chat" },
+            {
+              scope:
+                "openid email profile https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly",
+            },
+          );
         }}
       />
       <ChatInput onSend={sendMessage} isStreaming={isStreaming} />

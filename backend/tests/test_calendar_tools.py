@@ -8,6 +8,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.agents.tools.calendar_tools import (
+    CALENDAR_EVENTS_SCOPE,
+    CALENDAR_READONLY_SCOPE,
+    SCOPE_ERROR_SENTINEL,
     _build_service,  # pyright: ignore[reportPrivateUsage]
     _get_credentials,  # pyright: ignore[reportPrivateUsage]
     _refresh_token_for_tool,  # pyright: ignore[reportPrivateUsage]
@@ -36,7 +39,7 @@ def _make_stored_token(
         access_token=access_token,
         refresh_token="valid-refresh-token",
         expires_at=int(time.time()) - 100 if expired else int(time.time()) + 3600,
-        scopes=["https://www.googleapis.com/auth/calendar.events"],
+        scopes=[CALENDAR_EVENTS_SCOPE, CALENDAR_READONLY_SCOPE],
     )
 
 
@@ -189,6 +192,65 @@ class TestRefreshTokenForTool:
             assert isinstance(result, str)
             assert "network error" in result.lower()
 
+    async def test_should_use_scopes_from_google_refresh_response(self) -> None:
+        stored = _make_stored_token(expired=True)
+        mock_response = MagicMock()
+        mock_response.ok = True
+        mock_response.json.return_value = {
+            "access_token": "new-access-token",
+            "expires_in": 3600,
+            "scope": (
+                "openid email profile"
+                " https://www.googleapis.com/auth/calendar.events"
+                " https://www.googleapis.com/auth/calendar.readonly"
+            ),
+        }
+
+        with (
+            patch(
+                "app.agents.tools.calendar_tools.requests.post",
+                return_value=mock_response,
+            ),
+            patch(
+                "app.agents.tools.calendar_tools.store_token",
+                new_callable=AsyncMock,
+            ) as mock_store,
+        ):
+            result = await _refresh_token_for_tool(FAKE_USER_ID, stored)
+            assert isinstance(result, StoredToken)
+            assert result.scopes == [
+                "openid",
+                "email",
+                "profile",
+                "https://www.googleapis.com/auth/calendar.events",
+                "https://www.googleapis.com/auth/calendar.readonly",
+            ]
+            mock_store.assert_called_once()
+
+    async def test_should_preserve_stored_scopes_when_google_omits_scope(self) -> None:
+        stored = _make_stored_token(expired=True)
+        mock_response = MagicMock()
+        mock_response.ok = True
+        mock_response.json.return_value = {
+            "access_token": "new-access-token",
+            "expires_in": 3600,
+            # No "scope" field in response
+        }
+
+        with (
+            patch(
+                "app.agents.tools.calendar_tools.requests.post",
+                return_value=mock_response,
+            ),
+            patch(
+                "app.agents.tools.calendar_tools.store_token",
+                new_callable=AsyncMock,
+            ),
+        ):
+            result = await _refresh_token_for_tool(FAKE_USER_ID, stored)
+            assert isinstance(result, StoredToken)
+            assert result.scopes == stored.scopes
+
     async def test_should_return_error_on_google_rejection(self) -> None:
         stored = _make_stored_token(expired=True)
         mock_response = MagicMock()
@@ -231,6 +293,82 @@ class TestBuildService:
         ):
             result = await _build_service(FAKE_USER_ID)
             assert isinstance(result, str)
+
+    async def test_should_return_scope_sentinel_when_calendar_scope_missing(
+        self,
+    ) -> None:
+        identity_only_token = StoredToken(
+            access_token="valid-access",
+            refresh_token="valid-refresh",
+            expires_at=int(time.time()) + 3600,
+            scopes=["openid", "email", "profile"],
+        )
+        with patch(
+            "app.agents.tools.calendar_tools.get_token",
+            new_callable=AsyncMock,
+            return_value=identity_only_token,
+        ):
+            result = await _build_service(FAKE_USER_ID)
+            assert result == SCOPE_ERROR_SENTINEL
+
+    async def test_should_proceed_when_calendar_scope_present(self) -> None:
+        token = _make_stored_token()  # includes calendar.events scope
+        with (
+            patch(
+                "app.agents.tools.calendar_tools.get_token",
+                new_callable=AsyncMock,
+                return_value=token,
+            ),
+            patch(
+                "app.agents.tools.calendar_tools.build",
+                return_value=MagicMock(),
+            ),
+        ):
+            result = await _build_service(FAKE_USER_ID)
+            assert not isinstance(result, str)
+
+
+class TestHttpErrorDetection:
+    def _make_http_error(self, status: int, content: bytes) -> Any:
+        """Create a mock HttpError."""
+        from googleapiclient.errors import HttpError
+
+        resp = MagicMock()
+        resp.status = status
+        return HttpError(resp=resp, content=content)
+
+    async def test_should_return_scope_sentinel_on_403_insufficient_permissions(
+        self,
+    ) -> None:
+        error = self._make_http_error(
+            403,
+            b'{"error": {"errors": [{"reason": "insufficientPermissions"}]}}',
+        )
+        service = MagicMock()
+        service.calendars.return_value.get.return_value.execute.side_effect = error
+
+        with patch(
+            "app.agents.tools.calendar_tools._build_service",
+            new_callable=AsyncMock,
+            return_value=service,
+        ):
+            result = await get_current_datetime.ainvoke({"user_id": FAKE_USER_ID})
+            assert result == SCOPE_ERROR_SENTINEL
+
+    async def test_should_propagate_non_permission_http_errors(self) -> None:
+        error = self._make_http_error(404, b'{"error": {"message": "Not found"}}')
+        service = MagicMock()
+        service.calendars.return_value.get.return_value.execute.side_effect = error
+
+        with patch(
+            "app.agents.tools.calendar_tools._build_service",
+            new_callable=AsyncMock,
+            return_value=service,
+        ):
+            result = await get_current_datetime.ainvoke({"user_id": FAKE_USER_ID})
+            assert isinstance(result, str)
+            assert result != SCOPE_ERROR_SENTINEL
+            assert "Failed" in result
 
 
 # ---------------------------------------------------------------------------

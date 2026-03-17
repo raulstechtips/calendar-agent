@@ -26,7 +26,7 @@ describe("ScopeManager", () => {
       />,
     );
 
-    expect(screen.getByText("Google Calendar")).toBeInTheDocument();
+    expect(screen.getByText("Calendar Events")).toBeInTheDocument();
     expect(screen.getByText("Email")).toBeInTheDocument();
   });
 
@@ -38,7 +38,7 @@ describe("ScopeManager", () => {
     ).toBeInTheDocument();
   });
 
-  it("should hide grant button when calendar scope is already granted", () => {
+  it("should hide grant button when calendar scopes are already granted", () => {
     render(
       <ScopeManager
         scopes={[
@@ -46,6 +46,7 @@ describe("ScopeManager", () => {
           "email",
           "profile",
           "https://www.googleapis.com/auth/calendar.events",
+          "https://www.googleapis.com/auth/calendar.readonly",
         ]}
       />,
     );
@@ -68,7 +69,7 @@ describe("ScopeManager", () => {
       { redirectTo: "/settings" },
       {
         scope:
-          "openid email profile https://www.googleapis.com/auth/calendar.events",
+          "openid email profile https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly",
       },
     );
   });

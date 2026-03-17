@@ -98,7 +98,7 @@ class TestStoreToken:
         key = mock_redis.hset.call_args.args[0]
         assert key == "oauth_token:user-abc:google"
 
-    async def test_should_set_ttl_with_safety_margin(
+    async def test_should_set_fixed_seven_day_ttl(
         self,
         mock_redis: AsyncMock,
         fake_settings: SimpleNamespace,
@@ -119,10 +119,9 @@ class TestStoreToken:
 
         mock_redis.expire.assert_awaited_once()
         actual_ttl = mock_redis.expire.call_args.args[1]
-        expected_ttl = future_time - int(time.time()) - 300
-        assert abs(actual_ttl - expected_ttl) <= 2
+        assert actual_ttl == 60 * 60 * 24 * 7  # 7 days
 
-    async def test_should_use_fallback_ttl_when_already_expired(
+    async def test_should_set_same_ttl_regardless_of_token_expiry(
         self,
         mock_redis: AsyncMock,
         fake_settings: SimpleNamespace,
@@ -143,7 +142,7 @@ class TestStoreToken:
 
         mock_redis.expire.assert_awaited_once()
         actual_ttl = mock_redis.expire.call_args.args[1]
-        assert actual_ttl == 60
+        assert actual_ttl == 60 * 60 * 24 * 7  # 7 days — not based on expires_at
 
 
 class TestGetToken:

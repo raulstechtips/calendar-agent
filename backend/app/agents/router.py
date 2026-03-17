@@ -8,13 +8,14 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from langchain_core.messages import AIMessageChunk, HumanMessage
+from langchain_core.messages import AIMessageChunk, HumanMessage, ToolMessage
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Command
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.agents.calendar_agent import build_thread_id, get_agent
 from app.agents.guardrails import check_canary_leak
+from app.agents.tools.calendar_tools import CALENDAR_EVENTS_SCOPE, SCOPE_ERROR_SENTINEL
 from app.auth.dependencies import get_current_user
 from app.core.config import settings
 from app.users.schemas import UserResponse
@@ -91,6 +92,28 @@ async def _stream_response(
             config={"configurable": {"thread_id": thread_id}},
             stream_mode="messages",
         ):
+            # Short-circuit on scope error from calendar tools (#94)
+            if (
+                isinstance(chunk, ToolMessage)
+                and isinstance(chunk.content, str)
+                and SCOPE_ERROR_SENTINEL in chunk.content
+            ):
+                yield _emit_token(
+                    "I don't have access to your calendar yet. "
+                    "Please grant calendar permissions below, then try again."
+                )
+                scope_event: dict[str, Any] = {
+                    "type": "scope_required",
+                    "scope": CALENDAR_EVENTS_SCOPE,
+                }
+                yield f"data: {json.dumps(scope_event)}\n\n"
+                scope_done: dict[str, Any] = {
+                    "type": "done",
+                    "thread_id": thread_id,
+                }
+                yield f"data: {json.dumps(scope_done)}\n\n"
+                return
+
             if not (isinstance(chunk, AIMessageChunk) and chunk.content):
                 continue
 

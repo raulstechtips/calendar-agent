@@ -60,8 +60,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           scope: account.scope,
           error: undefined,
         };
-        // Fire-and-forget sync to backend Redis
-        syncTokenToBackend(updatedToken).catch(() => {});
+        // Await sync for sign-in/consent — this is the only moment we get
+        // the calendar-scoped refresh token from Google (#94)
+        await syncTokenToBackend(updatedToken).catch((err) => {
+          console.error("[auth] Token sync failed after sign-in:", err);
+        });
         return updatedToken;
       }
 
