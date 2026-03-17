@@ -17,8 +17,6 @@ from langchain_core.messages import (
     ToolMessage,
 )
 
-from app.agents.tools.calendar_tools import CALENDAR_SCOPE, SCOPE_ERROR_SENTINEL
-
 from app.agents.calendar_agent import (
     build_thread_id,
     create_agent,
@@ -30,6 +28,7 @@ from app.agents.prompts import (
     get_system_instructions,
 )
 from app.agents.state import AgentState
+from app.agents.tools.calendar_tools import CALENDAR_SCOPE, SCOPE_ERROR_SENTINEL
 from app.auth.dependencies import get_current_user
 from app.main import app
 from app.users.schemas import UserResponse

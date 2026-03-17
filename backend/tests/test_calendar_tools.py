@@ -8,7 +8,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.agents.tools.calendar_tools import (
-    CALENDAR_SCOPE,
     SCOPE_ERROR_SENTINEL,
     _build_service,  # pyright: ignore[reportPrivateUsage]
     _get_credentials,  # pyright: ignore[reportPrivateUsage]
@@ -346,7 +345,7 @@ class TestHttpErrorDetection:
             new_callable=AsyncMock,
             return_value=service,
         ):
-            result = await get_current_datetime.ainvoke(  # type: ignore[union-attr]
+            result = await get_current_datetime.ainvoke(
                 {"user_id": FAKE_USER_ID}
             )
             assert result == SCOPE_ERROR_SENTINEL
@@ -361,7 +360,7 @@ class TestHttpErrorDetection:
             new_callable=AsyncMock,
             return_value=service,
         ):
-            result = await get_current_datetime.ainvoke(  # type: ignore[union-attr]
+            result = await get_current_datetime.ainvoke(
                 {"user_id": FAKE_USER_ID}
             )
             assert isinstance(result, str)

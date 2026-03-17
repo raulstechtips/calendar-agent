@@ -107,11 +107,11 @@ async def _stream_response(
                     "scope": CALENDAR_SCOPE,
                 }
                 yield f"data: {json.dumps(scope_event)}\n\n"
-                done_event: dict[str, Any] = {
+                scope_done: dict[str, Any] = {
                     "type": "done",
                     "thread_id": thread_id,
                 }
-                yield f"data: {json.dumps(done_event)}\n\n"
+                yield f"data: {json.dumps(scope_done)}\n\n"
                 return
 
             if not (isinstance(chunk, AIMessageChunk) and chunk.content):

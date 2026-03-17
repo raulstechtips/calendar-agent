@@ -110,9 +110,7 @@ async def _refresh_token_for_tool(
     # fall back to stored scopes if Google omits the field.
     scope_str = data.get("scope")
     refreshed_scopes = (
-        scope_str.split()
-        if isinstance(scope_str, str) and scope_str
-        else stored.scopes
+        scope_str.split() if isinstance(scope_str, str) and scope_str else stored.scopes
     )
 
     updated = StoredToken(
@@ -205,7 +203,7 @@ async def _build_service(user_id: str) -> Any | str:
 
 def _is_insufficient_permissions(e: HttpError) -> bool:
     """Check if an HttpError is a 403 insufficientPermissions response."""
-    return e.resp.status == 403 and b"insufficientPermissions" in (e.content or b"")  # type: ignore[union-attr]
+    return e.resp.status == 403 and b"insufficientPermissions" in (e.content or b"")
 
 
 # ---------------------------------------------------------------------------

@@ -98,9 +98,7 @@ async def refresh_user_token(user_id: str) -> TokenRefreshResponse:
     # fall back to stored scopes if Google omits the field.
     scope_str = data.get("scope")
     refreshed_scopes = (
-        scope_str.split()
-        if isinstance(scope_str, str) and scope_str
-        else stored.scopes
+        scope_str.split() if isinstance(scope_str, str) and scope_str else stored.scopes
     )
 
     updated = StoredToken(
