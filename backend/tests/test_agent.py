@@ -45,6 +45,22 @@ class FakeToolChatModel(GenericFakeChatModel):
 _SubgraphChunk = tuple[tuple[str, ...], tuple[BaseMessage, dict[str, str]]]
 
 
+def _empty_snapshot() -> Any:
+    """Return a StateSnapshot with no pending interrupts."""
+    from langgraph.types import StateSnapshot
+
+    return StateSnapshot(
+        values={},
+        next=(),
+        config={"configurable": {"thread_id": "test"}},
+        metadata=None,
+        created_at=None,
+        parent_config=None,
+        tasks=(),
+        interrupts=(),
+    )
+
+
 class FakeAgent:
     """Mock agent that yields predefined chunks in subgraphs=True format."""
 
@@ -57,6 +73,9 @@ class FakeAgent:
         for chunk in self._chunks:
             yield ((), chunk)
 
+    async def aget_state(self, *args: Any, **kwargs: Any) -> Any:
+        return _empty_snapshot()
+
 
 class ErrorAgent:
     """Mock agent that raises during streaming."""
@@ -66,6 +85,9 @@ class ErrorAgent:
     ) -> AsyncGenerator[_SubgraphChunk, None]:
         raise RuntimeError("LLM connection failed")
         yield  # type: ignore[unreachable]  # pragma: no cover
+
+    async def aget_state(self, *args: Any, **kwargs: Any) -> Any:
+        return _empty_snapshot()
 
 
 class ScopeErrorAgent:
@@ -80,6 +102,48 @@ class ScopeErrorAgent:
                 ToolMessage(content=SCOPE_ERROR_SENTINEL, tool_call_id="test-call"),
                 {"langgraph_node": "agent"},
             ),
+        )
+
+    async def aget_state(self, *args: Any, **kwargs: Any) -> Any:
+        return _empty_snapshot()
+
+
+class InterruptAgent:
+    """Mock agent that simulates a tool interrupt (human-in-the-loop)."""
+
+    def __init__(self, interrupt_value: dict[str, Any]) -> None:
+        self._interrupt_value = interrupt_value
+
+    async def astream(
+        self, *args: Any, **kwargs: Any
+    ) -> AsyncGenerator[_SubgraphChunk, None]:
+        # Agent emits a partial response before the tool interrupts
+        yield (
+            (),
+            (
+                AIMessageChunk(content="Let me create that event for you."),
+                {"langgraph_node": "agent"},
+            ),
+        )
+
+    async def aget_state(self, *args: Any, **kwargs: Any) -> Any:
+        from langgraph.types import Interrupt, PregelTask, StateSnapshot
+
+        task = PregelTask(
+            id="task-1",
+            name="agent",
+            path=("__pregel_pull", "agent"),
+            interrupts=(Interrupt(value=self._interrupt_value),),
+        )
+        return StateSnapshot(
+            values={},
+            next=("agent",),
+            config={"configurable": {"thread_id": "test"}},
+            metadata=None,
+            created_at=None,
+            parent_config=None,
+            tasks=(task,),
+            interrupts=(Interrupt(value=self._interrupt_value),),
         )
 
 
@@ -522,3 +586,121 @@ class TestChatEndpoint:
         # Last event: done (no error events)
         assert events[-1]["type"] == "done"
         assert not any(e["type"] == "error" for e in events)
+
+    async def test_should_emit_confirmation_event_on_tool_interrupt(
+        self, client: httpx.AsyncClient
+    ) -> None:
+        interrupt_value = {
+            "action": "create_event",
+            "summary": "Team standup",
+            "start": "2026-03-15 09:00:00",
+            "end": "2026-03-15 09:30:00",
+            "timezone": "America/New_York",
+            "description": None,
+            "location": None,
+            "attendees": None,
+            "calendar_id": "primary",
+        }
+        self._override_agent(InterruptAgent(interrupt_value))  # type: ignore[arg-type]
+        response = await client.post(
+            "/api/chat", json={"message": "Create a standup meeting"}
+        )
+
+        assert response.status_code == 200
+        events = _parse_sse_events(response.text)
+
+        # Should contain a confirmation event before done
+        confirmation_events = [e for e in events if e["type"] == "confirmation"]
+        assert len(confirmation_events) == 1
+
+        conf = confirmation_events[0]
+        assert conf["action"] == "create_event"
+        assert "action_id" in conf
+        assert len(conf["action_id"]) > 0
+        assert conf["details"]["summary"] == "Team standup"
+
+        # Last event is still done
+        assert events[-1]["type"] == "done"
+
+    async def test_should_not_emit_confirmation_when_no_interrupt(
+        self, client: httpx.AsyncClient
+    ) -> None:
+        self._override_agent(
+            FakeAgent(
+                [
+                    (
+                        AIMessageChunk(content="No events found."),
+                        {"langgraph_node": "agent"},
+                    )
+                ]
+            )
+        )
+        response = await client.post(
+            "/api/chat", json={"message": "What's on my calendar?"}
+        )
+        events = _parse_sse_events(response.text)
+
+        confirmation_events = [e for e in events if e["type"] == "confirmation"]
+        assert len(confirmation_events) == 0
+
+
+class TestConfirmEndpoint:
+    @pytest.fixture(autouse=True)
+    def _default_auth_override(
+        self,
+    ) -> Generator[None, None, None]:
+        mock_user = UserResponse(
+            id=TEST_USER_ID,
+            email="testuser@example.com",
+            name="Test User",
+            picture=None,
+            granted_scopes=[],
+        )
+
+        async def _override() -> UserResponse:
+            return mock_user
+
+        app.dependency_overrides[get_current_user] = _override
+        yield
+        app.dependency_overrides.pop(get_current_user, None)
+
+    async def test_should_reject_unauthenticated_confirm(
+        self, client: httpx.AsyncClient
+    ) -> None:
+        app.dependency_overrides.pop(get_current_user, None)
+        response = await client.post(
+            "/api/chat/confirm",
+            json={
+                "thread_id": f"user-{TEST_USER_ID}:session-abc",
+                "action_id": "test-action",
+                "approved": True,
+            },
+        )
+        assert response.status_code == 401
+
+    async def test_should_reject_thread_from_other_user(
+        self, client: httpx.AsyncClient
+    ) -> None:
+        response = await client.post(
+            "/api/chat/confirm",
+            json={
+                "thread_id": "user-other-user:session-abc",
+                "action_id": "test-action",
+                "approved": False,
+            },
+        )
+        assert response.status_code == 403
+
+    async def test_should_return_cancelled_when_rejected(
+        self, client: httpx.AsyncClient
+    ) -> None:
+        response = await client.post(
+            "/api/chat/confirm",
+            json={
+                "thread_id": f"user-{TEST_USER_ID}:session-abc",
+                "action_id": "test-action",
+                "approved": False,
+            },
+        )
+        assert response.status_code == 200
+        assert response.json()["status"] == "cancelled"

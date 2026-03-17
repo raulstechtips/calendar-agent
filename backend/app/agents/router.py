@@ -154,6 +154,32 @@ async def _stream_response(
             if buf:
                 yield _emit_token(buf)
 
+        # Check for pending human-in-the-loop interrupts after stream ends
+        try:
+            cfg = {"configurable": {"thread_id": thread_id}}
+            snapshot = await agent.aget_state(cfg)  # type: ignore[arg-type]
+            for task in snapshot.tasks:
+                if task.interrupts:
+                    val = task.interrupts[0].value
+                    is_confirmation = (
+                        isinstance(val, dict) and "action" in val
+                    )
+                    if is_confirmation:
+                        action_id = uuid.uuid4().hex[:12]
+                        confirmation_event: dict[str, Any] = {
+                            "type": "confirmation",
+                            "action": val["action"],
+                            "action_id": action_id,
+                            "details": val,
+                        }
+                        yield f"data: {json.dumps(confirmation_event)}\n\n"
+                    break
+        except Exception:
+            logger.exception(
+                "Failed to check interrupt state for thread=%s",
+                thread_id,
+            )
+
     except Exception:
         logger.exception("Agent streaming error")
         error_event: dict[str, Any] = {
@@ -189,10 +215,11 @@ async def chat(
 @router.post("/api/chat/confirm", response_model=ConfirmResponse)
 async def confirm(
     request: ConfirmRequest,
+    user: UserResponse = Depends(get_current_user),  # noqa: B008
     agent: CompiledStateGraph = Depends(get_agent),  # type: ignore[type-arg]  # noqa: B008
 ) -> ConfirmResponse:
     """Confirm or reject a pending write operation."""
-    user_id = "dev-user"  # stub until auth wired in #9/#10/#11
+    user_id = user.id
 
     if not _is_valid_thread_id(request.thread_id, user_id):
         raise HTTPException(status_code=403, detail="Thread ID ownership mismatch")

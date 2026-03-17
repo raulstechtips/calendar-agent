@@ -256,6 +256,7 @@ describe("useChat", () => {
       actionId: "act-123",
       action: "create_event",
       details: { summary: "Team standup", start: "2026-03-16 09:00:00" },
+      status: "pending",
     });
   });
 

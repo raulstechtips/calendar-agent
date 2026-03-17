@@ -421,11 +421,25 @@ class TestConfirmationSchemas:
 
 class TestConfirmEndpoint:
     @pytest.fixture(autouse=True)
-    def _default_agent_override(self) -> Generator[None, None, None]:
+    def _default_overrides(self) -> Generator[None, None, None]:
         fake = _FakeAgent([])
         app.dependency_overrides[get_agent] = lambda: fake
+
+        mock_user = UserResponse(
+            id=TEST_USER_ID,
+            email="testuser@example.com",
+            name="Test User",
+            picture=None,
+            granted_scopes=[],
+        )
+
+        async def _auth_override() -> UserResponse:
+            return mock_user
+
+        app.dependency_overrides[get_current_user] = _auth_override
         yield
         app.dependency_overrides.pop(get_agent, None)
+        app.dependency_overrides.pop(get_current_user, None)
 
     async def test_should_return_executed_when_approved(
         self, client: httpx.AsyncClient
@@ -433,7 +447,7 @@ class TestConfirmEndpoint:
         response = await client.post(
             "/api/chat/confirm",
             json={
-                "thread_id": "user-dev-user:session-abc123",
+                "thread_id": f"user-{TEST_USER_ID}:session-abc123",
                 "action_id": "call_001",
                 "approved": True,
             },
@@ -448,7 +462,7 @@ class TestConfirmEndpoint:
         response = await client.post(
             "/api/chat/confirm",
             json={
-                "thread_id": "user-dev-user:session-abc123",
+                "thread_id": f"user-{TEST_USER_ID}:session-abc123",
                 "action_id": "call_001",
                 "approved": False,
             },
@@ -476,7 +490,7 @@ class TestConfirmEndpoint:
         response = await client.post(
             "/api/chat/confirm",
             json={
-                "thread_id": "user-dev-user:session-",
+                "thread_id": f"user-{TEST_USER_ID}:session-",
                 "action_id": "call_001",
                 "approved": True,
             },
@@ -488,7 +502,7 @@ class TestConfirmEndpoint:
     ) -> None:
         response = await client.post(
             "/api/chat/confirm",
-            json={"thread_id": "user-dev-user:session-abc123"},
+            json={"thread_id": f"user-{TEST_USER_ID}:session-abc123"},
         )
         assert response.status_code == 422
 
