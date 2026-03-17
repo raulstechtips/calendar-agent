@@ -19,7 +19,13 @@ logger = logging.getLogger(__name__)
 
 
 def get_user_from_token(request: Request) -> str:
-    """Extract user ID from Bearer JWT for rate limiting, with IP fallback."""
+    """Extract user ID from Bearer JWT for rate limiting, with IP fallback.
+
+    Decodes the JWT payload without signature verification for performance.
+    This is safe because rate limiting is best-effort — actual authentication
+    happens in get_current_user. A forged sub claim only affects which rate-limit
+    bucket is used, not access control.
+    """
     try:
         auth = request.headers.get("authorization", "")
         if not auth.lower().startswith("bearer "):

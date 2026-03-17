@@ -44,6 +44,9 @@ _GOOGLE_TIMEOUT = 10
 
 # Per-user lock to prevent concurrent token refreshes (single-instance only;
 # multi-instance deployments would need a Redis-based distributed lock).
+# NOTE: If a lock is evicted while held (extremely unlikely at maxsize 1024),
+# a concurrent refresh for the same user may run in parallel — harmless since
+# the refresh operation is idempotent.
 _REFRESH_LOCK_MAXSIZE = 1024
 _refresh_locks: OrderedDict[str, asyncio.Lock] = OrderedDict()
 

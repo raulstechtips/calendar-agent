@@ -257,7 +257,7 @@ class TestGetUserFromToken:
         request = self._make_request({"Authorization": f"Bearer {token}"})
         result = get_user_from_token(request)
         assert result != ""
-        assert result != ""
+        assert "." in result or result.startswith("127")  # IP address, not a sub
 
 
 class TestConfig:
