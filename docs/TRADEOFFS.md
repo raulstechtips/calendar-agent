@@ -560,12 +560,12 @@ An attacker can craft a three-part Bearer token with an arbitrary `sub` claim (e
 1. **Auth still rejects the request.** `Depends(get_current_user)` verifies the JWT signature after the rate-limit check. A forged token always results in 401 — the attacker never reaches the agent.
 2. **The rate-limit counter still increments.** slowapi counts the request before the handler runs. After 20 forged requests as `"attacker-1"`, that bucket is exhausted — the attacker must rotate to a new fake sub.
 3. **Auth verification is cheap.** Google's signing cert is cached locally via `CacheControl(requests.Session())` for ~5.5 hours. Subsequent verifications are CPU-only (~1-5ms), no network call.
-4. **The global 60/min default also applies.** Even rotating sub values, all requests from the same IP share the global limiter. An attacker can't exceed 60 failed auth attempts per minute per IP.
-5. **No data exfiltration.** The attacker gains nothing — no access to the chat endpoint, no calendar data, no side effects. The only cost is wasted CPU on signature verification (~5ms × 60 requests = ~300ms/min per attacking IP).
+4. **No per-IP backstop for bearer requests.** Both the global 60/min default and the per-route 20/min limit use `get_user_from_token` as the key function. When a Bearer token is present (even forged), the key is the `sub` claim — not the IP. An attacker rotating forged sub values gets a fresh bucket per sub for all limits. Requests without a Bearer token correctly fall back to IP-based limiting. See `backend/app/core/middleware.py:21-50` for the key function implementation.
+5. **No data exfiltration.** The attacker gains nothing — no access to the chat endpoint, no calendar data, no side effects. The only cost is wasted CPU on signature verification (~5ms per request). In practice, ASGI server connection limits and infrastructure-level rate limiting (load balancer, Azure Front Door) provide an outer defense layer.
 
 ### When this breaks
 
-- Distributed bot farm (many IPs) making unauthenticated probing requests — the per-user limit becomes meaningless since each forged sub gets its own bucket, and each IP gets 60/min of failed auth attempts
+- Distributed bot farm (many IPs) making probing requests with forged Bearer tokens — each forged sub gets its own rate-limit bucket with no IP-based floor, enabling unlimited 401s limited only by infrastructure capacity
 - Compliance requirement for verified-identity rate limiting (e.g., SOC 2 audit)
 - Moving the chat endpoint behind a public API gateway without additional rate limiting at the gateway level
 
