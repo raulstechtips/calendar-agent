@@ -189,6 +189,60 @@ class TestRefreshTokenForTool:
             assert isinstance(result, str)
             assert "network error" in result.lower()
 
+    async def test_should_use_scopes_from_google_refresh_response(self) -> None:
+        stored = _make_stored_token(expired=True)
+        mock_response = MagicMock()
+        mock_response.ok = True
+        mock_response.json.return_value = {
+            "access_token": "new-access-token",
+            "expires_in": 3600,
+            "scope": "openid email profile https://www.googleapis.com/auth/calendar.events",
+        }
+
+        with (
+            patch(
+                "app.agents.tools.calendar_tools.requests.post",
+                return_value=mock_response,
+            ),
+            patch(
+                "app.agents.tools.calendar_tools.store_token",
+                new_callable=AsyncMock,
+            ) as mock_store,
+        ):
+            result = await _refresh_token_for_tool(FAKE_USER_ID, stored)
+            assert isinstance(result, StoredToken)
+            assert result.scopes == [
+                "openid",
+                "email",
+                "profile",
+                "https://www.googleapis.com/auth/calendar.events",
+            ]
+            mock_store.assert_called_once()
+
+    async def test_should_preserve_stored_scopes_when_google_omits_scope(self) -> None:
+        stored = _make_stored_token(expired=True)
+        mock_response = MagicMock()
+        mock_response.ok = True
+        mock_response.json.return_value = {
+            "access_token": "new-access-token",
+            "expires_in": 3600,
+            # No "scope" field in response
+        }
+
+        with (
+            patch(
+                "app.agents.tools.calendar_tools.requests.post",
+                return_value=mock_response,
+            ),
+            patch(
+                "app.agents.tools.calendar_tools.store_token",
+                new_callable=AsyncMock,
+            ),
+        ):
+            result = await _refresh_token_for_tool(FAKE_USER_ID, stored)
+            assert isinstance(result, StoredToken)
+            assert result.scopes == stored.scopes
+
     async def test_should_return_error_on_google_rejection(self) -> None:
         stored = _make_stored_token(expired=True)
         mock_response = MagicMock()

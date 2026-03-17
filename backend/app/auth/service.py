@@ -94,6 +94,15 @@ async def refresh_user_token(user_id: str) -> TokenRefreshResponse:
     new_expires_at = int(time.time()) + expires_in
     new_refresh_token = data.get("refresh_token")
 
+    # Use scopes from Google's response when available (self-correcting);
+    # fall back to stored scopes if Google omits the field.
+    scope_str = data.get("scope")
+    refreshed_scopes = (
+        scope_str.split()
+        if isinstance(scope_str, str) and scope_str
+        else stored.scopes
+    )
+
     updated = StoredToken(
         access_token=new_access_token,
         refresh_token=(
@@ -102,7 +111,7 @@ async def refresh_user_token(user_id: str) -> TokenRefreshResponse:
             else stored.refresh_token
         ),
         expires_at=new_expires_at,
-        scopes=stored.scopes,
+        scopes=refreshed_scopes,
     )
 
     try:
