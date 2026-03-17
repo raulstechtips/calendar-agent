@@ -89,7 +89,6 @@ jobs:
           VERSION="${{ needs.detect-changes.outputs.frontend_version }}"
           IMAGE="${{ vars.ACR_LOGIN_SERVER }}/frontend"
           docker build \
-            --build-arg NEXT_PUBLIC_API_URL=https://${{ vars.BACKEND_FQDN }} \
             -t "${IMAGE}:${VERSION}-${BUILD_ID}" \
             -t "${IMAGE}:${VERSION}" \
             frontend/
