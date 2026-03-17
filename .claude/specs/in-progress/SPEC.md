@@ -174,10 +174,12 @@ frontend/
     ├── hooks/
     │   └── useChat.ts               # Chat state, streaming, confirmation handling
     ├── lib/
-    │   ├── api.ts                   # Typed API client — ALL backend calls go through here
+    │   ├── api.ts                   # Typed API client for request/response backend calls (server-side only)
     │   └── google-auth.ts           # Token refresh utility
     └── actions/                     # Server Actions ("use server")
 ```
+
+> **Frontend API rule:** All backend calls are server-side — the browser never contacts the backend directly. Regular API calls go through `api.ts`; SSE streams go through the Next.js route handler proxy at `/api/chat`; client-initiated mutations use Server Actions. The backend remains internal-only (`external_enabled = false`).
 
 ### Backend (`/backend`)
 
@@ -283,8 +285,6 @@ class AgentState(TypedDict):
 class SyncMetadata(BaseModel):
     sync_token: str | None    # Google Calendar incremental sync token
     last_ingested_at: int     # Unix timestamp of last successful sync
-    window_start: str         # ISO date — oldest event ingested
-    window_end: str           # ISO date — furthest future event ingested
 ```
 
 ### Search Document (Azure AI Search index: `calendar-context`)
@@ -308,11 +308,11 @@ class SyncMetadata(BaseModel):
 
 ```
 POST /api/auth/callback          # Google OAuth callback — exchanges code for tokens, stores encrypted
-GET  /api/auth/session           # Returns current session info
 POST /api/auth/refresh           # Force token refresh
 DELETE /api/auth/revoke          # Revoke Google access, clear Redis
-POST /api/auth/consent           # Trigger incremental consent for new scopes
 ```
+
+> Incremental consent uses the standard `/api/auth/callback` flow — no dedicated endpoint needed. Auth.js owns sessions; the backend is zero-trust per-request via `get_current_user`.
 
 ### User Endpoints
 
@@ -329,6 +329,9 @@ POST /api/chat                   # Send message to agent, returns SSE stream
     data: {"type": "token", "content": "..."}
     data: {"type": "confirmation", "action": "create_event", "details": {...}}
     data: {"type": "done", "thread_id": "..."}
+    data: {"type": "error", "message": "..."}
+    data: {"type": "blocked", "reason": "..."}
+    data: {"type": "scope_required", "scope": "..."}
 
 POST /api/chat/confirm           # Confirm a human-in-the-loop action
   Request:  { "thread_id": str, "action_id": str, "approved": bool }
@@ -374,8 +377,8 @@ User Input
 
 | Tool | Source | Scopes Required | Write? |
 |------|--------|-----------------|--------|
-| `list_events` | langchain-google-community | `calendar.events.readonly` | No |
-| `create_event` | langchain-google-community | `calendar.events` | Yes — requires confirmation |
+| `list_events` | custom @tool | `calendar.events.readonly` | No |
+| `create_event` | custom @tool | `calendar.events` | Yes — requires confirmation |
 | `update_event` | custom @tool | `calendar.events` | Yes — requires confirmation |
 | `delete_event` | custom @tool | `calendar.events` | Yes — requires confirmation |
 | `search_context` | custom @tool | none (internal) | No |
@@ -676,7 +679,8 @@ Decisions are appended here as they're made. Old decisions are kept but marked s
 | 2026-03-14 | `gmail.metadata` scope not `gmail.readonly` | Avoids Restricted scope annual security audit; metadata sufficient for MVP |
 | 2026-03-14 | Single AI Search index with user_id filter | Microsoft recommended; simpler than index-per-user; 200-index limit irrelevant |
 | 2026-03-14 | FastAPI BackgroundTasks over ARQ | MVP ingestion is simple; ARQ adds Redis broker complexity |
-| 2026-03-14 | InMemorySaver for dev, PostgresSaver for prod | Checkpointing needed for multi-turn conversations; Postgres for persistence |
+| 2026-03-14 | ~~InMemorySaver for dev, PostgresSaver for prod~~ **Superseded 2026-03-17** | ~~Checkpointing needed for multi-turn conversations; Postgres for persistence~~ |
+| 2026-03-17 | MemorySaver for MVP, `langgraph-checkpoint-redis` for Phase 2 | Redis already deployed; avoids adding Postgres. ~20min swap when ready |
 | 2026-03-14 | No APIM for MVP | Direct Container Apps ingress; add APIM in Epic 2 for enterprise features |
 | 2026-03-14 | Calendar only for MVP, no Gmail tools | Reduces scope; Gmail tools add Restricted scope complications |
 | 2026-03-14 | uv for Python package management | 10-100x faster than pip; pyproject.toml + uv.lock replaces requirements.txt |
@@ -692,3 +696,56 @@ Decisions are appended here as they're made. Old decisions are kept but marked s
 | 2026-03-15 | Two User Assigned Identities for least-privilege | Shared identity (KV + ACR) on both apps; backend-only identity (AI services) on backend only. Prevents frontend from accessing OpenAI/Search/Safety. User Assigned (not System Assigned) avoids chicken-and-egg deployment race |
 | 2026-03-15 | Redis password+TLS via Key Vault; Entra ID auth deferred to Phase 2 | Entra ID for Redis requires custom `CredentialProvider` with token refresh every ~45min; password via KV is simpler and secure enough for MVP |
 | 2026-03-15 | VNet + Private Endpoints for all Azure services (#71) | Defense-in-depth: RBAC is Layer 1 (auth), PE is Layer 2 (network). All 5 services get PEs in a dedicated subnet; public endpoints kept with Deny ACL + deployer IP allowlist for Terraform access. Networking module owns shared infra (VNet, subnets, DNS zones); each service module owns its own PE and `network_acls` |
+| 2026-03-17 | Custom calendar `@tool` functions instead of `langchain-google-community` tools | `langchain-google-community` binds credentials at instantiation, incompatible with multi-user; custom tools inject credentials per-request |
+| 2026-03-17 | Regex + Content Safety for MVP input guard, Prompt Shields deferred | Sandwich defense + bounded tools + human-in-the-loop sufficient; same Content Safety resource, add Prompt Shields when threat model expands |
+
+---
+
+## Phase 2: Enhancement (Roadmap)
+
+High-level overview of planned post-MVP workstreams. Detailed specs will be created when Phase 2 begins.
+
+### 2.1 UI Overhaul
+
+The current UI is functional but visually rough. Phase 2 redesigns the frontend:
+- Modern, polished chat interface (better message bubbles, animations, loading states)
+- Responsive/mobile-friendly layout
+- Dark mode support
+- Conversation sidebar with chat history (list past sessions, switch between them)
+- Calendar view improvements (month view, drag-to-create, better event cards)
+- Settings page polish
+
+### 2.2 Chat Session Persistence & Context
+
+Currently conversations are lost on page refresh, navigation, or container restart (`MemorySaver` is in-memory only).
+- **Redis checkpointer** — swap `MemorySaver` for `langgraph-checkpoint-redis` (~20min, already researched). Conversations survive restarts, scale across replicas.
+- **Session history API** — new endpoints to list past conversations, load a conversation by thread_id, delete old conversations
+- **Context awareness** — agent knows what was said earlier in the session and can reference prior turns naturally
+- **Session metadata** — store title (auto-generated from first message), created_at, last_active_at per thread
+
+### 2.3 Gmail Integration & Email Intelligence
+
+Expand from calendar-only to email-aware assistant. Requires Restricted scopes — accepted as a Phase 2 trade-off.
+
+**Scopes required:**
+- `gmail.readonly` (Restricted) — read email content for style analysis and context
+- `gmail.send` (Restricted) — send emails and drafts on behalf of the user
+- `contacts.readonly` — resolve names to email addresses
+- Annual Google security audit required for Restricted scopes
+
+**Sent email analysis** — Ingest user's sent emails to understand their communication style, tone, and common phrases. Enables the agent to draft emails that sound like the user.
+
+**Email drafting & sending** — Agent can compose and send emails matching the user's voice. New agent tools: `draft_email`, `send_email`, `list_recent_emails`. All send operations require user confirmation (same pattern as calendar writes).
+
+**Contact extraction** — Ingest user's contacts from Google People API so the agent can resolve names to email addresses for scheduling and drafting. Enables prompts like: "Schedule a meeting with Joe, Dan, and Sally" or "Write me an email draft I can share with each of them."
+
+### 2.4 Smart Scheduling & Analytics
+
+Build on calendar tools to offer proactive intelligence:
+- **Meeting analytics** — "How much time am I spending in meetings?" → query search index, calculate meeting hours, identify trends
+- **Schedule optimization** — "Block my mornings for workouts" → create recurring blocks, respect existing meetings, suggest optimal times
+- **Conflict detection** — proactive alerts when new events overlap or user is double-booked
+
+### 2.5 Security Hardening
+
+- **Azure Prompt Shields** — add ML-based injection detection (same Content Safety resource, ~50ms latency, no new infrastructure; documented in TRADEOFFS.md #5)

@@ -34,7 +34,7 @@ paths:
 
 ### Lifespan
 - Use `lifespan` async context manager (not deprecated `@app.on_event`)
-- Store shared resources (Redis pool, HTTP client) on `app.state`
+- Use module-level singletons with `get_*()` / `reset_*()` for shared resources — provides better testability without requiring an app instance
 - Always clean up resources in the shutdown phase
 
 ## Pydantic v2

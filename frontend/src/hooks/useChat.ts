@@ -44,7 +44,7 @@ type ChatAction =
   | { type: "STREAM_ERROR"; error: string }
   | { type: "BLOCKED"; content: string }
   | { type: "CONFIRMATION_RECEIVED"; confirmation: PendingConfirmation }
-  | { type: "CONFIRMATION_RESOLVED" }
+  | { type: "CONFIRMATION_RESOLVED"; status: "confirmed" | "cancelled" }
   | { type: "CLEAR_ERROR" }
   | { type: "SCOPE_REQUIRED"; scopeRequired: ScopeRequired }
   | { type: "CLEAR_SCOPE_REQUIRED" };
@@ -61,6 +61,7 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         ],
         isStreaming: true,
         error: null,
+        pendingConfirmation: null,
       };
 
     case "APPEND_TOKEN": {
@@ -94,7 +95,12 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return { ...state, pendingConfirmation: action.confirmation };
 
     case "CONFIRMATION_RESOLVED":
-      return { ...state, pendingConfirmation: null };
+      return {
+        ...state,
+        pendingConfirmation: state.pendingConfirmation
+          ? { ...state.pendingConfirmation, status: action.status }
+          : null,
+      };
 
     case "CLEAR_ERROR":
       return { ...state, error: null };
@@ -128,7 +134,7 @@ export interface UseChatReturn {
 }
 
 /** Chat state management hook with SSE streaming. */
-export function useChat(token: string): UseChatReturn {
+export function useChat(): UseChatReturn {
   const [state, dispatch] = useReducer(chatReducer, initialState);
   const abortRef = useRef<AbortController | null>(null);
   const streamingRef = useRef(false);
@@ -164,7 +170,6 @@ export function useChat(token: string): UseChatReturn {
         const stream = streamChat({
           message: trimmed,
           threadId: state.threadId,
-          token,
           signal: controller.signal,
         });
 
@@ -183,7 +188,7 @@ export function useChat(token: string): UseChatReturn {
         streamingRef.current = false;
       }
     },
-    [state.threadId, token],
+    [state.threadId],
   );
 
   const confirmAction = useCallback(
@@ -194,7 +199,10 @@ export function useChat(token: string): UseChatReturn {
         if (result.status.startsWith("error:")) {
           dispatch({ type: "STREAM_ERROR", error: result.status });
         } else {
-          dispatch({ type: "CONFIRMATION_RESOLVED" });
+          dispatch({
+            type: "CONFIRMATION_RESOLVED",
+            status: approved ? "confirmed" : "cancelled",
+          });
         }
       } catch (err) {
         dispatch({
@@ -256,6 +264,7 @@ function handleEvent(
           actionId: event.action_id,
           action: event.action,
           details: event.details,
+          status: "pending",
         },
       });
       break;

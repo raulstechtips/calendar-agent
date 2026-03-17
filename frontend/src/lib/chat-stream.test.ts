@@ -49,7 +49,6 @@ async function collectEvents(
 const defaultParams = {
   message: "hello",
   threadId: null,
-  token: "test-token",
 };
 
 describe("streamChat", () => {
@@ -183,7 +182,7 @@ describe("streamChat", () => {
     );
   });
 
-  it("should send correct request with auth header and body", async () => {
+  it("should send correct request with body to relative URL", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       mockResponse([
         'data: {"type":"done","thread_id":"t1"}\n\n',
@@ -194,16 +193,14 @@ describe("streamChat", () => {
     await collectEvents({
       message: "test message",
       threadId: "user-abc:session-xyz",
-      token: "my-token",
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("/api/chat"),
+      "/api/chat",
       expect.objectContaining({
         method: "POST",
         headers: expect.objectContaining({
           "Content-Type": "application/json",
-          Authorization: "Bearer my-token",
         }),
         body: JSON.stringify({
           message: "test message",

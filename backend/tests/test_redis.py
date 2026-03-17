@@ -87,8 +87,9 @@ class TestHealthEndpointWithRedis:
         with patch("app.main.get_redis", return_value=mock_redis):
             response = await client.get("/health")
 
-        assert response.status_code == 200
+        assert response.status_code == 503
         data = response.json()
+        assert data["status"] == "degraded"
         assert data["redis"] == "error"
 
 

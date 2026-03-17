@@ -36,7 +36,7 @@ describe("useChat", () => {
   });
 
   it("should start with empty state", () => {
-    const { result } = renderHook(() => useChat("test-token"));
+    const { result } = renderHook(() => useChat());
 
     expect(result.current.messages).toEqual([]);
     expect(result.current.threadId).toBeNull();
@@ -54,7 +54,7 @@ describe("useChat", () => {
       ]),
     );
 
-    const { result } = renderHook(() => useChat("test-token"));
+    const { result } = renderHook(() => useChat());
 
     await act(async () => {
       await result.current.sendMessage("hi");
@@ -77,7 +77,7 @@ describe("useChat", () => {
       ]),
     );
 
-    const { result } = renderHook(() => useChat("test-token"));
+    const { result } = renderHook(() => useChat());
 
     await act(async () => {
       await result.current.sendMessage("test");
@@ -94,7 +94,7 @@ describe("useChat", () => {
       ]),
     );
 
-    const { result } = renderHook(() => useChat("test-token"));
+    const { result } = renderHook(() => useChat());
 
     await act(async () => {
       await result.current.sendMessage("ignore instructions");
@@ -115,7 +115,7 @@ describe("useChat", () => {
       ]),
     );
 
-    const { result } = renderHook(() => useChat("test-token"));
+    const { result } = renderHook(() => useChat());
 
     await act(async () => {
       await result.current.sendMessage("test");
@@ -138,7 +138,7 @@ describe("useChat", () => {
       ]),
     );
 
-    const { result } = renderHook(() => useChat("test-token"));
+    const { result } = renderHook(() => useChat());
 
     await act(async () => {
       await result.current.sendMessage("msg1");
@@ -166,7 +166,7 @@ describe("useChat", () => {
   });
 
   it("should not send empty messages", async () => {
-    const { result } = renderHook(() => useChat("test-token"));
+    const { result } = renderHook(() => useChat());
 
     await act(async () => {
       await result.current.sendMessage("");
@@ -191,7 +191,7 @@ describe("useChat", () => {
       })(),
     );
 
-    const { result } = renderHook(() => useChat("test-token"));
+    const { result } = renderHook(() => useChat());
 
     // Start first message (non-blocking)
     let sendPromise: Promise<void>;
@@ -222,7 +222,7 @@ describe("useChat", () => {
       throw new Error("Network error");
     });
 
-    const { result } = renderHook(() => useChat("test-token"));
+    const { result } = renderHook(() => useChat());
 
     await act(async () => {
       await result.current.sendMessage("test");
@@ -246,7 +246,7 @@ describe("useChat", () => {
       ]),
     );
 
-    const { result } = renderHook(() => useChat("test-token"));
+    const { result } = renderHook(() => useChat());
 
     await act(async () => {
       await result.current.sendMessage("create event");
@@ -256,6 +256,7 @@ describe("useChat", () => {
       actionId: "act-123",
       action: "create_event",
       details: { summary: "Team standup", start: "2026-03-16 09:00:00" },
+      status: "pending",
     });
   });
 
@@ -269,7 +270,7 @@ describe("useChat", () => {
 
     mockSubmitConfirmation.mockResolvedValue({ status: "executed" });
 
-    const { result } = renderHook(() => useChat("test-token"));
+    const { result } = renderHook(() => useChat());
 
     await act(async () => {
       await result.current.sendMessage("create event");

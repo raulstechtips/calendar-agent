@@ -10,6 +10,7 @@ import json
 import logging
 import re
 import time
+from collections import OrderedDict
 from datetime import datetime
 from functools import partial
 from typing import Annotated, Any
@@ -43,14 +44,23 @@ _GOOGLE_TIMEOUT = 10
 
 # Per-user lock to prevent concurrent token refreshes (single-instance only;
 # multi-instance deployments would need a Redis-based distributed lock).
-_refresh_locks: dict[str, asyncio.Lock] = {}
+# NOTE: If a lock is evicted while held (extremely unlikely at maxsize 1024),
+# a concurrent refresh for the same user may run in parallel — harmless since
+# the refresh operation is idempotent.
+_REFRESH_LOCK_MAXSIZE = 1024
+_refresh_locks: OrderedDict[str, asyncio.Lock] = OrderedDict()
 
 
 def _get_refresh_lock(user_id: str) -> asyncio.Lock:
-    """Return the per-user refresh lock, creating it if needed."""
-    if user_id not in _refresh_locks:
-        _refresh_locks[user_id] = asyncio.Lock()
-    return _refresh_locks[user_id]
+    """Return a per-user refresh lock, creating if needed. Bounded by LRU eviction."""
+    if user_id in _refresh_locks:
+        _refresh_locks.move_to_end(user_id)
+        return _refresh_locks[user_id]
+    if len(_refresh_locks) >= _REFRESH_LOCK_MAXSIZE:
+        _refresh_locks.popitem(last=False)
+    lock = asyncio.Lock()
+    _refresh_locks[user_id] = lock
+    return lock
 
 
 # ---------------------------------------------------------------------------
