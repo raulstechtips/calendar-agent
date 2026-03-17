@@ -16,10 +16,11 @@ When a user's Google OAuth access token expires, the agent refreshes it before c
 
 ### What we built (MVP)
 
-Per-user `asyncio.Lock` with a double-check pattern:
+Per-user `asyncio.Lock` with a double-check pattern, stored in a bounded `OrderedDict` with LRU eviction (maxsize=1024, added in #100):
 
 ```python
-_refresh_locks: dict[str, asyncio.Lock] = {}
+_REFRESH_LOCK_MAXSIZE = 1024
+_refresh_locks: OrderedDict[str, asyncio.Lock] = OrderedDict()
 
 async def _get_credentials(user_id):
     stored = await get_token(user_id)
@@ -31,11 +32,14 @@ async def _get_credentials(user_id):
                 stored = await _refresh_token_for_tool(user_id, stored)
 ```
 
+If a lock is evicted while held (extremely unlikely at 1024 capacity), a concurrent refresh for the same user may run in parallel — harmless since the refresh operation is idempotent.
+
 ### Why this is sufficient for now
 
 - MVP runs a single Container App replica (one Python process)
 - `asyncio.Lock` serializes all coroutines within that process
 - Even without the lock, the race is benign — both refreshes succeed and whichever `store_token` runs last stores a valid token
+- Bounded at 1024 entries prevents memory leaks in long-running processes
 
 ### When this breaks
 
@@ -517,3 +521,83 @@ const clean = DOMPurify.sanitize(description, {
 - Adding email/Slack notifications that render event data outside React
 - Security audit or pen test that flags the lack of explicit sanitization
 - Evidence of calendar events with HTML/script payloads in production logs
+
+---
+
+## 7. Rate-Limit Key — Unverified JWT Sub vs Verified User ID
+
+**Date:** 2026-03-17
+**Issue:** #100 (Rate Limiter + Bounded Locks)
+**File:** `backend/app/core/middleware.py`
+
+### The problem
+
+SPEC requires 20 requests/minute per authenticated user on the chat endpoint. slowapi's `key_func` runs synchronously before FastAPI dependency injection, so we can't call the async `get_current_user` (which verifies the JWT signature against Google's public keys) to get a verified user ID for the rate-limit bucket.
+
+### What we built (MVP)
+
+`get_user_from_token` extracts the `sub` claim from the JWT payload via base64 decoding — no signature verification. Falls back to IP address (`get_remote_address`) when the token is missing, malformed, or lacks a `sub` claim.
+
+```python
+def get_user_from_token(request: Request) -> str:
+    """Decode JWT payload for sub claim; fall back to IP."""
+    try:
+        auth = request.headers.get("authorization", "")
+        token = auth[7:]  # strip "Bearer "
+        payload = base64url_decode(token.split(".")[1])
+        sub = json.loads(payload).get("sub")
+        return sub if isinstance(sub, str) and sub else get_remote_address(request)
+    except Exception:
+        return get_remote_address(request)
+```
+
+### The concern — forged sub claim for bucket rotation
+
+An attacker can craft a three-part Bearer token with an arbitrary `sub` claim (e.g., `"attacker-1"`, `"attacker-2"`) to get a separate rate-limit bucket per forged identity, sidestepping the 20/min per-user limit.
+
+### Why this is sufficient for now
+
+1. **Auth still rejects the request.** `Depends(get_current_user)` verifies the JWT signature after the rate-limit check. A forged token always results in 401 — the attacker never reaches the agent.
+2. **The rate-limit counter still increments.** slowapi counts the request before the handler runs. After 20 forged requests as `"attacker-1"`, that bucket is exhausted — the attacker must rotate to a new fake sub.
+3. **Auth verification is cheap.** Google's signing cert is cached locally via `CacheControl(requests.Session())` for ~5.5 hours. Subsequent verifications are CPU-only (~1-5ms), no network call.
+4. **The global 60/min default also applies.** Even rotating sub values, all requests from the same IP share the global limiter. An attacker can't exceed 60 failed auth attempts per minute per IP.
+5. **No data exfiltration.** The attacker gains nothing — no access to the chat endpoint, no calendar data, no side effects. The only cost is wasted CPU on signature verification (~5ms × 60 requests = ~300ms/min per attacking IP).
+
+### When this breaks
+
+- Distributed bot farm (many IPs) making unauthenticated probing requests — the per-user limit becomes meaningless since each forged sub gets its own bucket, and each IP gets 60/min of failed auth attempts
+- Compliance requirement for verified-identity rate limiting (e.g., SOC 2 audit)
+- Moving the chat endpoint behind a public API gateway without additional rate limiting at the gateway level
+
+### The upgrade path — Verified user ID in middleware
+
+Set a verified `user_id` on `request.state` in a custom middleware that runs before slowapi, then read it in the key function:
+
+```python
+# Middleware (runs before SlowAPI)
+class AuthStateMiddleware:
+    async def dispatch(self, request, call_next):
+        try:
+            user = await verify_token(request)
+            request.state.verified_user_id = user.id
+        except Exception:
+            request.state.verified_user_id = None
+        return await call_next(request)
+
+# Key function
+def get_rate_limit_key(request: Request) -> str:
+    user_id = getattr(request.state, "verified_user_id", None)
+    return user_id if user_id else get_remote_address(request)
+```
+
+Key details:
+- Adds ~1-5ms latency per request (cached cert verification) — acceptable for auth endpoints
+- Requires restructuring middleware order: Auth State → SlowAPI → CORS
+- Eliminates the forged sub bypass entirely
+- Falls back to IP for unauthenticated requests (login, health check, etc.)
+
+### Trigger to upgrade
+
+- Evidence of distributed probing (many IPs with failed auth) visible in logs
+- SOC 2 or similar compliance audit requiring verified-identity rate limiting
+- Adding a public API surface beyond the Next.js frontend proxy
