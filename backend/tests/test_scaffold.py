@@ -30,7 +30,10 @@ class TestHealthEndpoint:
     async def test_health_returns_json_content_type(
         self, client: httpx.AsyncClient
     ) -> None:
-        response = await client.get("/health")
+        mock_redis = AsyncMock()
+        mock_redis.ping.return_value = True
+        with patch("app.main.get_redis", return_value=mock_redis):
+            response = await client.get("/health")
         assert "application/json" in response.headers["content-type"]
 
     async def test_health_returns_503_when_redis_down(
@@ -125,6 +128,7 @@ class TestCORS:
                 "Access-Control-Request-Method": "PUT",
             },
         )
+        assert response.status_code == 400
         allowed = response.headers.get("access-control-allow-methods", "")
         assert "PUT" not in allowed
 
