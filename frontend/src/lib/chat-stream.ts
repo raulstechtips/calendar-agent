@@ -88,7 +88,6 @@ export class ChatStreamError extends Error {
 interface StreamChatParams {
   message: string;
   threadId: string | null;
-  token: string;
   signal?: AbortSignal;
 }
 
@@ -96,15 +95,10 @@ interface StreamChatParams {
 export async function* streamChat(
   params: StreamChatParams,
 ): AsyncGenerator<ChatSSEEvent> {
-  // Intentionally duplicated from api.ts — can't import from api.ts because
-  // it pulls in auth() which is server-only and incompatible with client components
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-
-  const response = await fetch(`${apiUrl}/api/chat`, {
+  const response = await fetch("/api/chat", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${params.token}`,
     },
     body: JSON.stringify({
       message: params.message,
