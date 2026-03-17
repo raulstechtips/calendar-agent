@@ -80,8 +80,10 @@ export default function ChatThread({
           <ConfirmationCard
             action={pendingConfirmation.action}
             details={pendingConfirmation.details}
+            status={pendingConfirmation.status}
             onApprove={onApprove}
             onReject={onReject}
+            disabled={pendingConfirmation.status !== "pending"}
           />
         )}
         {scopeRequired && <ScopeRequiredCard onGrant={onGrantScope} />}

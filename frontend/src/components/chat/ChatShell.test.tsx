@@ -85,4 +85,42 @@ describe("ChatShell", () => {
       await screen.findByText("Something went wrong"),
     ).toBeInTheDocument();
   });
+
+  it("should display confirmation card when stream emits confirmation event", async () => {
+    mockStreamChat.mockReturnValue(
+      fakeStream([
+        { type: "token", content: "I'll create that for you." },
+        {
+          type: "confirmation",
+          action: "create_event",
+          action_id: "act-1",
+          details: {
+            action: "create_event",
+            summary: "Team standup",
+            start: "2026-03-15 09:00:00",
+            end: "2026-03-15 09:30:00",
+            timezone: "America/New_York",
+            calendar_id: "primary",
+          },
+        },
+        { type: "done", thread_id: "t1" },
+      ]),
+    );
+
+    const user = userEvent.setup();
+    render(<ChatShell />);
+
+    const input = screen.getByRole("textbox", { name: /chat message/i });
+    await user.type(input, "create a standup{Enter}");
+
+    // Should show the confirmation card with formatted content
+    expect(await screen.findByText("Create Event")).toBeInTheDocument();
+    expect(await screen.findByText("Team standup")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: /approve/i }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: /reject/i }),
+    ).toBeInTheDocument();
+  });
 });
