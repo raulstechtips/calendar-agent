@@ -44,13 +44,15 @@ describe("formatConfirmationDetails", () => {
     expect(eventField).toBeDefined();
     expect(eventField?.value).toBe("Team standup");
 
-    // Should contain Start and End
+    // Should contain formatted Start and End with correct time
     const startField = result.find((f) => f.label === "Start");
     expect(startField).toBeDefined();
     expect(startField?.value).toContain("Mar");
+    expect(startField?.value).toContain("9:00");
 
     const endField = result.find((f) => f.label === "End");
     expect(endField).toBeDefined();
+    expect(endField?.value).toContain("9:30");
   });
 
   it("should skip null values", () => {
@@ -128,6 +130,24 @@ describe("formatConfirmationDetails", () => {
       "Quarterly review",
     );
     expect(result.find((f) => f.label === "Location")?.value).toBe("Room 42");
+  });
+
+  it("should title-case unknown field labels", () => {
+    const details: Record<string, unknown> = {
+      action: "create_event",
+      summary: "Meeting",
+      start: "2026-03-15 10:00:00",
+      end: "2026-03-15 11:00:00",
+      timezone: "UTC",
+      recurrence_rule: "FREQ=WEEKLY",
+      calendar_id: "primary",
+    };
+
+    const result = formatConfirmationDetails("create_event", details);
+    const recurrenceField = result.find((f) => f.label === "Recurrence Rule");
+
+    expect(recurrenceField).toBeDefined();
+    expect(recurrenceField?.value).toBe("FREQ=WEEKLY");
   });
 
   it("should handle delete_event with minimal fields", () => {

@@ -18,24 +18,36 @@ const INTERNAL_FIELDS = new Set([
   "timezone",
 ]);
 
-/** Map a backend action name to a human-readable label. */
-export function getActionLabel(action: string): string {
-  if (action in ACTION_LABELS) {
-    return ACTION_LABELS[action] as string;
-  }
-  return action
+/** Title-case a snake_case string (e.g. "some_field" → "Some Field"). */
+function titleCase(input: string): string {
+  return input
     .split("_")
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(" ");
 }
 
-function formatDateTime(raw: string, timezone?: string): string {
+/** Map a backend action name to a human-readable label. */
+export function getActionLabel(action: string): string {
+  if (action in ACTION_LABELS) {
+    return ACTION_LABELS[action] as string;
+  }
+  return titleCase(action);
+}
+
+function formatDateTime(raw: string): string {
   try {
-    // Backend sends "YYYY-MM-DD HH:MM:SS" — convert to ISO for Date parsing
-    const iso = raw.replace(" ", "T");
-    const date = new Date(iso);
+    // Backend sends "YYYY-MM-DD HH:MM:SS" — wall-clock time in the event's
+    // timezone. Parse components manually and store as UTC to avoid the
+    // browser interpreting the string in its local timezone.
+    const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})\s(\d{2}):(\d{2}):(\d{2})$/);
+    if (!match) return raw;
+
+    const [, y, mo, d, h, mi] = match;
+    const date = new Date(Date.UTC(+y!, +mo! - 1, +d!, +h!, +mi!));
     if (isNaN(date.getTime())) return raw;
 
+    // Format as UTC so the displayed time matches the backend's wall-clock
+    // values exactly, regardless of the user's browser timezone.
     return new Intl.DateTimeFormat("en-US", {
       weekday: "short",
       month: "short",
@@ -43,7 +55,7 @@ function formatDateTime(raw: string, timezone?: string): string {
       year: "numeric",
       hour: "numeric",
       minute: "2-digit",
-      timeZone: timezone ?? undefined,
+      timeZone: "UTC",
     }).format(date);
   } catch {
     return raw;
@@ -56,19 +68,17 @@ export function formatConfirmationDetails(
   details: Record<string, unknown>,
 ): FormattedDetail[] {
   const fields: FormattedDetail[] = [];
-  const tz =
-    typeof details["timezone"] === "string" ? details["timezone"] : undefined;
 
   if (typeof details["summary"] === "string") {
     fields.push({ label: "Event", value: details["summary"] });
   }
 
   if (typeof details["start"] === "string") {
-    fields.push({ label: "Start", value: formatDateTime(details["start"], tz) });
+    fields.push({ label: "Start", value: formatDateTime(details["start"]) });
   }
 
   if (typeof details["end"] === "string") {
-    fields.push({ label: "End", value: formatDateTime(details["end"], tz) });
+    fields.push({ label: "End", value: formatDateTime(details["end"]) });
   }
 
   if (typeof details["description"] === "string") {
@@ -87,19 +97,19 @@ export function formatConfirmationDetails(
   }
 
   // Add any remaining non-internal, non-null fields not already handled
+  const knownKeys = new Set([
+    "summary",
+    "start",
+    "end",
+    "description",
+    "location",
+    "attendees",
+  ]);
   for (const [key, value] of Object.entries(details)) {
     if (INTERNAL_FIELDS.has(key)) continue;
     if (value == null) continue;
-    const knownKeys = new Set([
-      "summary",
-      "start",
-      "end",
-      "description",
-      "location",
-      "attendees",
-    ]);
     if (knownKeys.has(key)) continue;
-    fields.push({ label: key, value: String(value) });
+    fields.push({ label: titleCase(key), value: String(value) });
   }
 
   return fields;

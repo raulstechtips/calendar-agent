@@ -83,6 +83,8 @@ export default function ChatThread({
             status={pendingConfirmation.status}
             onApprove={onApprove}
             onReject={onReject}
+            // Defense-in-depth: buttons are only rendered when status is
+            // "pending", but disabled ensures safety if that logic changes.
             disabled={pendingConfirmation.status !== "pending"}
           />
         )}

@@ -32,14 +32,11 @@ describe("ConfirmationCard", () => {
     expect(screen.getByText("Team standup")).toBeInTheDocument();
   });
 
-  it("should render formatted date/time", () => {
+  it("should render formatted date/time with correct hour", () => {
     render(<ConfirmationCard {...defaultProps} />);
 
-    // Should show formatted dates, not raw strings
-    const startField = screen.getByText("Start:");
-    expect(startField).toBeInTheDocument();
-    // The formatted date should contain "Mar" (month abbreviation)
-    expect(startField.nextElementSibling?.textContent).toContain("Mar");
+    // Should show formatted dates with month and correct time
+    expect(screen.getByText(/Mar.*15,.*2026.*9:00/)).toBeInTheDocument();
   });
 
   it("should hide internal fields", () => {
