@@ -32,15 +32,20 @@ export async function POST(request: Request): Promise<Response> {
     return new Response("Invalid JSON", { status: 400 });
   }
 
-  const upstream = await fetch(`${getApiBaseUrl()}/api/chat`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${session.idToken}`,
-    },
-    body,
-    signal: request.signal,
-  });
+  let upstream: Response;
+  try {
+    upstream = await fetch(`${getApiBaseUrl()}/api/chat`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.idToken}`,
+      },
+      body,
+      signal: request.signal,
+    });
+  } catch {
+    return new Response("Upstream unavailable", { status: 502 });
+  }
 
   if (!upstream.ok) {
     const text = await upstream.text();

@@ -163,6 +163,26 @@ describe("POST /api/chat", () => {
     expect(text).toContain('"type":"done"');
   });
 
+  it("should return 502 when upstream fetch rejects", async () => {
+    mockedAuth.mockResolvedValue(makeSession());
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockRejectedValue(new Error("connect ECONNREFUSED")),
+    );
+
+    const { POST } = await import("./route");
+    const request = new Request("http://localhost:3000/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: "hello", thread_id: null }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(502);
+    expect(await response.text()).toBe("Upstream unavailable");
+  });
+
   it("should forward upstream error status to client", async () => {
     mockedAuth.mockResolvedValue(makeSession());
     vi.stubGlobal(
