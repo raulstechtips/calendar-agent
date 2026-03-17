@@ -188,6 +188,35 @@ resource "azurerm_container_app" "frontend" {
         name  = "NEXT_PUBLIC_API_URL"
         value = "https://${local.backend_fqdn}"
       }
+
+      # --- Health probes ---
+
+      startup_probe {
+        transport               = "TCP"
+        port                    = 3000
+        initial_delay           = 3
+        interval_seconds        = 3
+        timeout                 = 3
+        failure_count_threshold = 20
+      }
+
+      liveness_probe {
+        transport               = "TCP"
+        port                    = 3000
+        interval_seconds        = 15
+        timeout                 = 3
+        failure_count_threshold = 3
+      }
+
+      readiness_probe {
+        transport               = "HTTP"
+        path                    = "/"
+        port                    = 3000
+        interval_seconds        = 10
+        timeout                 = 3
+        failure_count_threshold = 3
+        success_count_threshold = 1
+      }
     }
   }
 
@@ -337,6 +366,37 @@ resource "azurerm_container_app" "backend" {
       env {
         name  = "CORS_ORIGINS"
         value = "https://${local.frontend_fqdn}"
+      }
+
+      # --- Health probes ---
+
+      startup_probe {
+        transport               = "HTTP"
+        path                    = "/health"
+        port                    = 8000
+        initial_delay           = 5
+        interval_seconds        = 5
+        timeout                 = 3
+        failure_count_threshold = 30
+      }
+
+      liveness_probe {
+        transport               = "HTTP"
+        path                    = "/health"
+        port                    = 8000
+        interval_seconds        = 15
+        timeout                 = 3
+        failure_count_threshold = 3
+      }
+
+      readiness_probe {
+        transport               = "HTTP"
+        path                    = "/ready"
+        port                    = 8000
+        interval_seconds        = 10
+        timeout                 = 3
+        failure_count_threshold = 3
+        success_count_threshold = 1
       }
     }
   }
