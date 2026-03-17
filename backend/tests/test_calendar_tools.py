@@ -792,3 +792,73 @@ class TestGetLlm:
             call_kwargs = mock_llm_cls.call_args.kwargs
             assert "azure_ad_token_provider" in call_kwargs
             assert "api_key" not in call_kwargs
+
+
+# ---------------------------------------------------------------------------
+# Refresh lock bounding
+# ---------------------------------------------------------------------------
+
+
+class TestRefreshLockBounding:
+    @pytest.fixture(autouse=True)
+    def _clear_locks(self) -> None:  # pyright: ignore[reportUnusedFunction]
+        from app.agents.tools.calendar_tools import (
+            _refresh_locks,  # pyright: ignore[reportPrivateUsage]
+        )
+
+        _refresh_locks.clear()
+
+    def test_returns_same_lock_for_same_user(self) -> None:
+        from app.agents.tools.calendar_tools import (
+            _get_refresh_lock,  # pyright: ignore[reportPrivateUsage]
+        )
+
+        lock1 = _get_refresh_lock("user-a")
+        lock2 = _get_refresh_lock("user-a")
+        assert lock1 is lock2
+
+    def test_bounded_to_maxsize(self) -> None:
+        from app.agents.tools.calendar_tools import (
+            _REFRESH_LOCK_MAXSIZE,  # pyright: ignore[reportPrivateUsage]
+            _get_refresh_lock,  # pyright: ignore[reportPrivateUsage]
+            _refresh_locks,  # pyright: ignore[reportPrivateUsage]
+        )
+
+        for i in range(_REFRESH_LOCK_MAXSIZE + 1):
+            _get_refresh_lock(f"user-{i}")
+        assert len(_refresh_locks) == _REFRESH_LOCK_MAXSIZE
+
+    def test_evicts_oldest_entry(self) -> None:
+        from app.agents.tools.calendar_tools import (
+            _REFRESH_LOCK_MAXSIZE,  # pyright: ignore[reportPrivateUsage]
+            _get_refresh_lock,  # pyright: ignore[reportPrivateUsage]
+            _refresh_locks,  # pyright: ignore[reportPrivateUsage]
+        )
+
+        _get_refresh_lock("oldest-user")
+        for i in range(_REFRESH_LOCK_MAXSIZE):
+            _get_refresh_lock(f"user-{i}")
+        assert "oldest-user" not in _refresh_locks
+
+    def test_lru_access_prevents_eviction(self) -> None:
+        from app.agents.tools.calendar_tools import (
+            _REFRESH_LOCK_MAXSIZE,  # pyright: ignore[reportPrivateUsage]
+            _get_refresh_lock,  # pyright: ignore[reportPrivateUsage]
+            _refresh_locks,  # pyright: ignore[reportPrivateUsage]
+        )
+
+        # Fill to capacity - 1
+        for i in range(_REFRESH_LOCK_MAXSIZE - 1):
+            _get_refresh_lock(f"user-{i}")
+
+        # Add target user (oldest after the loop)
+        _get_refresh_lock("target-user")
+        assert len(_refresh_locks) == _REFRESH_LOCK_MAXSIZE
+
+        # Access target user to promote it (LRU)
+        _get_refresh_lock("target-user")
+
+        # Add one more to trigger eviction — should evict user-0 (oldest), not target
+        _get_refresh_lock("overflow-user")
+        assert "target-user" in _refresh_locks
+        assert "user-0" not in _refresh_locks

@@ -7,6 +7,7 @@ import httpx
 import pytest
 from httpx import ASGITransport
 from pydantic import ValidationError
+from starlette.requests import Request
 
 from app.main import app
 
@@ -180,6 +181,83 @@ class TestRateLimiting:
 
         assert hasattr(app.state, "limiter")
         assert isinstance(app.state.limiter, Limiter)
+
+    def test_limiter_uses_user_based_key_func(self) -> None:
+        from app.core.middleware import get_user_from_token, limiter
+
+        assert limiter._key_func is get_user_from_token  # pyright: ignore[reportPrivateUsage]
+
+
+class TestGetUserFromToken:
+    """Unit tests for the JWT-based rate-limit key function."""
+
+    def _make_jwt(self, payload: dict[str, str | int]) -> str:
+        """Build a fake unsigned JWT with the given payload claims."""
+        import base64
+        import json as _json
+
+        header = base64.urlsafe_b64encode(b'{"alg":"RS256"}').rstrip(b"=").decode()
+        body = base64.urlsafe_b64encode(
+            _json.dumps(payload).encode()
+        ).rstrip(b"=").decode()
+        sig = base64.urlsafe_b64encode(b"fakesig").rstrip(b"=").decode()
+        return f"{header}.{body}.{sig}"
+
+    def _make_request(self, headers: dict[str, str] | None = None) -> Request:
+        scope = {
+            "type": "http",
+            "method": "POST",
+            "path": "/api/chat",
+            "headers": [
+                (k.lower().encode(), v.encode())
+                for k, v in (headers or {}).items()
+            ],
+            "query_string": b"",
+            "root_path": "",
+            "server": ("127.0.0.1", 8000),
+        }
+        return Request(scope)
+
+    def test_extracts_sub_from_valid_jwt(self) -> None:
+        from app.core.middleware import get_user_from_token
+
+        token = self._make_jwt({"sub": "google-user-123", "aud": "test"})
+        request = self._make_request({"Authorization": f"Bearer {token}"})
+        assert get_user_from_token(request) == "google-user-123"
+
+    def test_falls_back_to_ip_on_missing_header(self) -> None:
+        from app.core.middleware import get_user_from_token
+
+        request = self._make_request()
+        result = get_user_from_token(request)
+        # Should return IP address, not a user sub
+        assert result != ""
+        assert "google" not in result
+
+    def test_falls_back_to_ip_on_malformed_token(self) -> None:
+        from app.core.middleware import get_user_from_token
+
+        request = self._make_request({"Authorization": "Bearer not-a-jwt"})
+        result = get_user_from_token(request)
+        assert result != ""
+        assert "google" not in result
+
+    def test_falls_back_to_ip_on_missing_sub(self) -> None:
+        from app.core.middleware import get_user_from_token
+
+        token = self._make_jwt({"aud": "test", "iss": "accounts.google.com"})
+        request = self._make_request({"Authorization": f"Bearer {token}"})
+        result = get_user_from_token(request)
+        assert "google" not in result
+
+    def test_falls_back_to_ip_on_empty_sub(self) -> None:
+        from app.core.middleware import get_user_from_token
+
+        token = self._make_jwt({"sub": "", "aud": "test"})
+        request = self._make_request({"Authorization": f"Bearer {token}"})
+        result = get_user_from_token(request)
+        assert result != ""
+        assert result != ""
 
 
 class TestConfig:

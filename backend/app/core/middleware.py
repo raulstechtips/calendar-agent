@@ -1,5 +1,9 @@
 """Middleware stack: CORS, correlation ID tracing, and rate limiting."""
 
+import base64
+import json
+import logging
+
 from asgi_correlation_id import CorrelationIdMiddleware
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,10 +11,37 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
+from starlette.requests import Request
 
 from app.core.config import settings
 
-limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
+logger = logging.getLogger(__name__)
+
+
+def get_user_from_token(request: Request) -> str:
+    """Extract user ID from Bearer JWT for rate limiting, with IP fallback."""
+    try:
+        auth = request.headers.get("authorization", "")
+        if not auth.lower().startswith("bearer "):
+            return get_remote_address(request)
+        token = auth[7:]
+        parts = token.split(".")
+        if len(parts) != 3:
+            return get_remote_address(request)
+        payload = parts[1]
+        padding = 4 - len(payload) % 4
+        if padding != 4:
+            payload += "=" * padding
+        claims = json.loads(base64.urlsafe_b64decode(payload))
+        sub = claims.get("sub")
+        if isinstance(sub, str) and sub:
+            return sub
+    except Exception:
+        pass
+    return get_remote_address(request)
+
+
+limiter = Limiter(key_func=get_user_from_token, default_limits=["60/minute"])
 
 
 def setup_middleware(app: FastAPI) -> None:

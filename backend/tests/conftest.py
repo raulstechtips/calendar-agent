@@ -1,5 +1,7 @@
 """Shared test fixtures for backend tests."""
 
+from collections.abc import Generator
+
 import pytest
 
 from app.users.schemas import UserResponse
@@ -41,3 +43,12 @@ def mock_user() -> UserResponse:
 def auth_headers() -> dict[str, str]:
     """Authorization header with a test bearer token."""
     return {"Authorization": "Bearer test-id-token"}
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _disable_rate_limiter() -> Generator[None, None, None]:  # pyright: ignore[reportUnusedFunction]
+    from app.core.middleware import limiter
+
+    limiter.enabled = False
+    yield
+    limiter.enabled = True
