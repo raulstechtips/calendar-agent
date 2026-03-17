@@ -22,6 +22,8 @@ concurrency:
 jobs:
   frontend:
     runs-on: ubuntu-latest
+    env:
+      TZ: UTC
     defaults:
       run:
         working-directory: frontend
