@@ -28,3 +28,6 @@ google_client_secret = "CHANGE_ME"
 auth_secret = "CHANGE_ME"
 # Generate: openssl rand -hex 16
 canary_token = "CHANGE_ME"
+
+# GitHub Actions OIDC — used to create the federated credential for CI/CD
+github_repo_name = "myorg/calendar-agent" # org/repo format

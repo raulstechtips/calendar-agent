@@ -47,6 +47,47 @@ resource "azurerm_role_assignment" "acr_pull" {
 }
 
 # -----------------------------------------------------------------------------
+# GitHub Actions OIDC — App Registration, Federated Credential, Role Assignments
+# -----------------------------------------------------------------------------
+
+resource "azuread_application" "github_actions" {
+  display_name = "github-actions-${var.name_suffix}"
+}
+
+resource "azuread_service_principal" "github_actions" {
+  client_id = azuread_application.github_actions.client_id
+}
+
+resource "azuread_application_federated_identity_credential" "github_production" {
+  application_id = azuread_application.github_actions.id
+  display_name   = "github-actions-production-env"
+  audiences      = ["api://AzureADTokenExchange"]
+  issuer         = "https://token.actions.githubusercontent.com"
+  subject        = "repo:${var.github_repo_name}:environment:production"
+}
+
+resource "azurerm_role_assignment" "github_acr_push" {
+  scope                            = azurerm_container_registry.this.id
+  role_definition_name             = "AcrPush"
+  principal_id                     = azuread_service_principal.github_actions.object_id
+  skip_service_principal_aad_check = true
+}
+
+resource "azurerm_role_assignment" "github_frontend_contributor" {
+  scope                            = azurerm_container_app.frontend.id
+  role_definition_name             = "Contributor"
+  principal_id                     = azuread_service_principal.github_actions.object_id
+  skip_service_principal_aad_check = true
+}
+
+resource "azurerm_role_assignment" "github_backend_contributor" {
+  scope                            = azurerm_container_app.backend.id
+  role_definition_name             = "Contributor"
+  principal_id                     = azuread_service_principal.github_actions.object_id
+  skip_service_principal_aad_check = true
+}
+
+# -----------------------------------------------------------------------------
 # Container Apps Environment (VNet-integrated, workload profiles)
 # -----------------------------------------------------------------------------
 
@@ -64,6 +105,10 @@ resource "azurerm_container_app_environment" "this" {
   }
 
   tags = var.common_tags
+
+  lifecycle {
+    ignore_changes = [infrastructure_resource_group_name]
+  }
 }
 
 # -----------------------------------------------------------------------------

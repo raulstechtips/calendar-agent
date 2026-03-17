@@ -9,8 +9,8 @@ import EventCard from "./EventCard";
 const baseEvent: CalendarEvent = {
   id: "event1",
   summary: "Team Standup",
-  start: "2026-03-16T10:00:00-04:00",
-  end: "2026-03-16T10:30:00-04:00",
+  start: "2026-03-16T10:00:00Z",
+  end: "2026-03-16T10:30:00Z",
   isAllDay: false,
   isAiCreated: false,
 };

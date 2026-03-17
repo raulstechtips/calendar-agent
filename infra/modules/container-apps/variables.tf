@@ -208,3 +208,19 @@ variable "acr_sku" {
     error_message = "ACR SKU must be one of: Basic, Standard, Premium."
   }
 }
+
+# --- GitHub Actions OIDC ---
+
+variable "github_repo_name" {
+  description = "GitHub repository in org/repo format for OIDC federated credentials"
+  type        = string
+
+  validation {
+    condition = (
+      length(split("/", var.github_repo_name)) == 2 &&
+      can(regex("^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$", split("/", var.github_repo_name)[0])) &&
+      can(regex("^[A-Za-z0-9._-]{1,100}$", split("/", var.github_repo_name)[1]))
+    )
+    error_message = "github_repo_name must be owner/repo: owner (alphanumeric + hyphens, max 39 chars), repo (alphanumeric + hyphen/underscore/dot, max 100 chars)."
+  }
+}

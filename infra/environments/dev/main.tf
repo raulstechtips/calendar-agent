@@ -18,6 +18,8 @@ provider "azurerm" {
   subscription_id = var.subscription_id
 }
 
+provider "azuread" {}
+
 locals {
   location_short = {
     eastus    = "eus"
@@ -204,6 +206,9 @@ module "container_apps" {
   openai_embed_deployment_name = module.ai_services.openai_embed_deployment_name
   search_endpoint              = module.ai_services.search_endpoint
   content_safety_endpoint      = module.ai_services.content_safety_endpoint
+
+  # GitHub Actions OIDC
+  github_repo_name = var.github_repo_name
 
   depends_on = [module.key_vault]
 }

@@ -190,8 +190,8 @@ describe("getEventPosition", () => {
 
   it("should position a 10am-11am event", () => {
     const { top, height } = getEventPosition(
-      "2026-03-16T10:00:00-04:00",
-      "2026-03-16T11:00:00-04:00",
+      "2026-03-16T10:00:00Z",
+      "2026-03-16T11:00:00Z",
       hourHeight,
     );
     expect(top).toBe(10 * hourHeight);
@@ -200,8 +200,8 @@ describe("getEventPosition", () => {
 
   it("should handle 30-minute events", () => {
     const { height } = getEventPosition(
-      "2026-03-16T10:00:00-04:00",
-      "2026-03-16T10:30:00-04:00",
+      "2026-03-16T10:00:00Z",
+      "2026-03-16T10:30:00Z",
       hourHeight,
     );
     expect(height).toBe(hourHeight / 2);
@@ -209,8 +209,8 @@ describe("getEventPosition", () => {
 
   it("should enforce minimum height", () => {
     const { height } = getEventPosition(
-      "2026-03-16T10:00:00-04:00",
-      "2026-03-16T10:10:00-04:00",
+      "2026-03-16T10:00:00Z",
+      "2026-03-16T10:10:00Z",
       hourHeight,
     );
     // 10 minutes = ~10.67px, but minimum should be usable
@@ -220,8 +220,8 @@ describe("getEventPosition", () => {
   it("should clamp cross-midnight events to end of day", () => {
     // 23:00 to 01:00 next day — should render from 23:00 to 24:00 (end of grid)
     const { top, height } = getEventPosition(
-      "2026-03-16T23:00:00-04:00",
-      "2026-03-17T01:00:00-04:00",
+      "2026-03-16T23:00:00Z",
+      "2026-03-17T01:00:00Z",
       hourHeight,
     );
     expect(top).toBe(23 * hourHeight);

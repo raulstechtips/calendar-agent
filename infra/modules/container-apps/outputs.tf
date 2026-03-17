@@ -42,3 +42,15 @@ output "log_analytics_workspace_id" {
   description = "Resource ID of the Log Analytics workspace"
   value       = azurerm_log_analytics_workspace.this.id
 }
+
+# --- GitHub Actions OIDC ---
+
+output "github_actions_client_id" {
+  description = "Client ID of the GitHub Actions app registration (for AZURE_CLIENT_ID secret)"
+  value       = azuread_application.github_actions.client_id
+}
+
+output "github_actions_tenant_id" {
+  description = "Tenant ID for the GitHub Actions OIDC login (for AZURE_TENANT_ID secret)"
+  value       = azuread_service_principal.github_actions.application_tenant_id
+}
