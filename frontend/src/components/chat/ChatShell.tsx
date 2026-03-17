@@ -15,8 +15,7 @@ import ChatInput from "./ChatInput";
 import ChatThread from "./ChatThread";
 
 export default function ChatShell() {
-  const { data: session, status } = useSession();
-  const token = session?.idToken ?? "";
+  const { status } = useSession();
 
   const {
     messages,
@@ -27,7 +26,7 @@ export default function ChatShell() {
     sendMessage,
     confirmAction,
     clearError,
-  } = useChat(token);
+  } = useChat();
 
   if (status === "loading") {
     return (

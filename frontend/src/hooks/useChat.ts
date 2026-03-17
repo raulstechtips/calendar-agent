@@ -128,7 +128,7 @@ export interface UseChatReturn {
 }
 
 /** Chat state management hook with SSE streaming. */
-export function useChat(token: string): UseChatReturn {
+export function useChat(): UseChatReturn {
   const [state, dispatch] = useReducer(chatReducer, initialState);
   const abortRef = useRef<AbortController | null>(null);
   const streamingRef = useRef(false);
@@ -164,7 +164,6 @@ export function useChat(token: string): UseChatReturn {
         const stream = streamChat({
           message: trimmed,
           threadId: state.threadId,
-          token,
           signal: controller.signal,
         });
 
@@ -183,7 +182,7 @@ export function useChat(token: string): UseChatReturn {
         streamingRef.current = false;
       }
     },
-    [state.threadId, token],
+    [state.threadId],
   );
 
   const confirmAction = useCallback(
