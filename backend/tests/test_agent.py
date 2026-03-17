@@ -28,8 +28,8 @@ from app.agents.prompts import (
     get_system_instructions,
 )
 from app.agents.state import AgentState
-from app.agents.tools.calendar_tools import CALENDAR_EVENTS_SCOPE, SCOPE_ERROR_SENTINEL
 from app.auth.dependencies import get_current_user
+from app.auth.google_credentials import CALENDAR_EVENTS_SCOPE, SCOPE_ERROR_SENTINEL
 from app.main import app
 from app.users.schemas import UserResponse
 from tests.conftest import TEST_USER_ID

@@ -16,8 +16,8 @@ from starlette.requests import Request
 
 from app.agents.calendar_agent import build_thread_id, get_agent
 from app.agents.guardrails import check_canary_leak
-from app.agents.tools.calendar_tools import CALENDAR_EVENTS_SCOPE, SCOPE_ERROR_SENTINEL
 from app.auth.dependencies import get_current_user
+from app.auth.google_credentials import CALENDAR_EVENTS_SCOPE, SCOPE_ERROR_SENTINEL
 from app.core.config import settings
 from app.core.middleware import limiter
 from app.users.schemas import UserResponse

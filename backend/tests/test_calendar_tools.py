@@ -8,12 +8,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.agents.tools.calendar_tools import (
-    CALENDAR_EVENTS_SCOPE,
-    CALENDAR_READONLY_SCOPE,
-    SCOPE_ERROR_SENTINEL,
-    _build_service,  # pyright: ignore[reportPrivateUsage]
-    _get_credentials,  # pyright: ignore[reportPrivateUsage]
-    _refresh_token_for_tool,  # pyright: ignore[reportPrivateUsage]
     calendar_tools,
     create_event,
     delete_event,
@@ -21,6 +15,14 @@ from app.agents.tools.calendar_tools import (
     get_current_datetime,
     search_events,
     update_event,
+)
+from app.auth.google_credentials import (
+    CALENDAR_EVENTS_SCOPE,
+    CALENDAR_READONLY_SCOPE,
+    SCOPE_ERROR_SENTINEL,
+    _refresh_token_for_tool,  # pyright: ignore[reportPrivateUsage]
+    build_calendar_service,
+    get_google_credentials,
 )
 from app.auth.token_storage import StoredToken, TokenEncryptionError, TokenNotFoundError
 
@@ -53,7 +55,7 @@ def _mock_calendar_service() -> MagicMock:
 def _patch_settings(monkeypatch: pytest.MonkeyPatch) -> None:  # pyright: ignore[reportUnusedFunction]
     """Ensure Google OAuth settings are available for all tests."""
     monkeypatch.setattr(
-        "app.agents.tools.calendar_tools.settings",
+        "app.auth.google_credentials.settings",
         MagicMock(
             google_client_id="test-client-id",
             google_client_secret="test-client-secret",
@@ -70,31 +72,31 @@ class TestGetCredentials:
     async def test_should_return_credentials_with_valid_token(self) -> None:
         token = _make_stored_token()
         with patch(
-            "app.agents.tools.calendar_tools.get_token",
+            "app.auth.google_credentials.get_token",
             new_callable=AsyncMock,
             return_value=token,
         ):
-            result = await _get_credentials(FAKE_USER_ID)
+            result = await get_google_credentials(FAKE_USER_ID)
             assert not isinstance(result, str)
             assert result.token == "valid-access-token"
 
     async def test_should_return_error_when_no_token_found(self) -> None:
         with patch(
-            "app.agents.tools.calendar_tools.get_token",
+            "app.auth.google_credentials.get_token",
             new_callable=AsyncMock,
             side_effect=TokenNotFoundError("No token"),
         ):
-            result = await _get_credentials(FAKE_USER_ID)
+            result = await get_google_credentials(FAKE_USER_ID)
             assert isinstance(result, str)
             assert "sign in" in result.lower()
 
     async def test_should_return_error_when_decryption_fails(self) -> None:
         with patch(
-            "app.agents.tools.calendar_tools.get_token",
+            "app.auth.google_credentials.get_token",
             new_callable=AsyncMock,
             side_effect=TokenEncryptionError("Bad key"),
         ):
-            result = await _get_credentials(FAKE_USER_ID)
+            result = await get_google_credentials(FAKE_USER_ID)
             assert isinstance(result, str)
             assert "re-authenticate" in result.lower()
 
@@ -104,17 +106,17 @@ class TestGetCredentials:
 
         with (
             patch(
-                "app.agents.tools.calendar_tools.get_token",
+                "app.auth.google_credentials.get_token",
                 new_callable=AsyncMock,
                 return_value=expired_token,
             ),
             patch(
-                "app.agents.tools.calendar_tools._refresh_token_for_tool",
+                "app.auth.google_credentials._refresh_token_for_tool",
                 new_callable=AsyncMock,
                 return_value=refreshed_token,
             ),
         ):
-            result = await _get_credentials(FAKE_USER_ID)
+            result = await get_google_credentials(FAKE_USER_ID)
             assert not isinstance(result, str)
             assert result.token == "refreshed-access-token"
 
@@ -126,11 +128,11 @@ class TestGetCredentials:
 
         # First call returns expired, second call (inside lock) returns fresh
         with patch(
-            "app.agents.tools.calendar_tools.get_token",
+            "app.auth.google_credentials.get_token",
             new_callable=AsyncMock,
             side_effect=[expired_token, fresh_token],
         ):
-            result = await _get_credentials(FAKE_USER_ID)
+            result = await get_google_credentials(FAKE_USER_ID)
             assert not isinstance(result, str)
             assert result.token == "already-refreshed"
 
@@ -139,17 +141,17 @@ class TestGetCredentials:
 
         with (
             patch(
-                "app.agents.tools.calendar_tools.get_token",
+                "app.auth.google_credentials.get_token",
                 new_callable=AsyncMock,
                 return_value=expired_token,
             ),
             patch(
-                "app.agents.tools.calendar_tools._refresh_token_for_tool",
+                "app.auth.google_credentials._refresh_token_for_tool",
                 new_callable=AsyncMock,
                 return_value="Google token refresh failed — please re-authenticate.",
             ),
         ):
-            result = await _get_credentials(FAKE_USER_ID)
+            result = await get_google_credentials(FAKE_USER_ID)
             assert isinstance(result, str)
             assert "re-authenticate" in result.lower()
 
@@ -166,11 +168,11 @@ class TestRefreshTokenForTool:
 
         with (
             patch(
-                "app.agents.tools.calendar_tools.requests.post",
+                "app.auth.google_credentials.requests.post",
                 return_value=mock_response,
             ),
             patch(
-                "app.agents.tools.calendar_tools.store_token",
+                "app.auth.google_credentials.store_token",
                 new_callable=AsyncMock,
             ) as mock_store,
         ):
@@ -185,7 +187,7 @@ class TestRefreshTokenForTool:
         import requests as req
 
         with patch(
-            "app.agents.tools.calendar_tools.requests.post",
+            "app.auth.google_credentials.requests.post",
             side_effect=req.RequestException("Connection error"),
         ):
             result = await _refresh_token_for_tool(FAKE_USER_ID, stored)
@@ -208,11 +210,11 @@ class TestRefreshTokenForTool:
 
         with (
             patch(
-                "app.agents.tools.calendar_tools.requests.post",
+                "app.auth.google_credentials.requests.post",
                 return_value=mock_response,
             ),
             patch(
-                "app.agents.tools.calendar_tools.store_token",
+                "app.auth.google_credentials.store_token",
                 new_callable=AsyncMock,
             ) as mock_store,
         ):
@@ -239,11 +241,11 @@ class TestRefreshTokenForTool:
 
         with (
             patch(
-                "app.agents.tools.calendar_tools.requests.post",
+                "app.auth.google_credentials.requests.post",
                 return_value=mock_response,
             ),
             patch(
-                "app.agents.tools.calendar_tools.store_token",
+                "app.auth.google_credentials.store_token",
                 new_callable=AsyncMock,
             ),
         ):
@@ -259,7 +261,7 @@ class TestRefreshTokenForTool:
         mock_response.text = "invalid_grant"
 
         with patch(
-            "app.agents.tools.calendar_tools.requests.post",
+            "app.auth.google_credentials.requests.post",
             return_value=mock_response,
         ):
             result = await _refresh_token_for_tool(FAKE_USER_ID, stored)
@@ -272,26 +274,26 @@ class TestBuildService:
         token = _make_stored_token()
         with (
             patch(
-                "app.agents.tools.calendar_tools.get_token",
+                "app.auth.google_credentials.get_token",
                 new_callable=AsyncMock,
                 return_value=token,
             ),
             patch(
-                "app.agents.tools.calendar_tools.build",
+                "app.auth.google_credentials.build",
                 return_value=MagicMock(),
             ) as mock_build,
         ):
-            result = await _build_service(FAKE_USER_ID)
+            result = await build_calendar_service(FAKE_USER_ID)
             assert not isinstance(result, str)
             mock_build.assert_called_once()
 
     async def test_should_return_error_when_credentials_fail(self) -> None:
         with patch(
-            "app.agents.tools.calendar_tools.get_token",
+            "app.auth.google_credentials.get_token",
             new_callable=AsyncMock,
             side_effect=TokenNotFoundError("No token"),
         ):
-            result = await _build_service(FAKE_USER_ID)
+            result = await build_calendar_service(FAKE_USER_ID)
             assert isinstance(result, str)
 
     async def test_should_return_scope_sentinel_when_calendar_scope_missing(
@@ -304,27 +306,27 @@ class TestBuildService:
             scopes=["openid", "email", "profile"],
         )
         with patch(
-            "app.agents.tools.calendar_tools.get_token",
+            "app.auth.google_credentials.get_token",
             new_callable=AsyncMock,
             return_value=identity_only_token,
         ):
-            result = await _build_service(FAKE_USER_ID)
+            result = await build_calendar_service(FAKE_USER_ID)
             assert result == SCOPE_ERROR_SENTINEL
 
     async def test_should_proceed_when_calendar_scope_present(self) -> None:
         token = _make_stored_token()  # includes calendar.events scope
         with (
             patch(
-                "app.agents.tools.calendar_tools.get_token",
+                "app.auth.google_credentials.get_token",
                 new_callable=AsyncMock,
                 return_value=token,
             ),
             patch(
-                "app.agents.tools.calendar_tools.build",
+                "app.auth.google_credentials.build",
                 return_value=MagicMock(),
             ),
         ):
-            result = await _build_service(FAKE_USER_ID)
+            result = await build_calendar_service(FAKE_USER_ID)
             assert not isinstance(result, str)
 
 
@@ -348,7 +350,7 @@ class TestHttpErrorDetection:
         service.calendars.return_value.get.return_value.execute.side_effect = error
 
         with patch(
-            "app.agents.tools.calendar_tools._build_service",
+            "app.agents.tools.calendar_tools.build_calendar_service",
             new_callable=AsyncMock,
             return_value=service,
         ):
@@ -361,7 +363,7 @@ class TestHttpErrorDetection:
         service.calendars.return_value.get.return_value.execute.side_effect = error
 
         with patch(
-            "app.agents.tools.calendar_tools._build_service",
+            "app.agents.tools.calendar_tools.build_calendar_service",
             new_callable=AsyncMock,
             return_value=service,
         ):
@@ -379,7 +381,7 @@ class TestHttpErrorDetection:
 def _patch_service(mock_service: MagicMock) -> Any:
     """Patch _build_service to return a mock."""
     return patch(
-        "app.agents.tools.calendar_tools._build_service",
+        "app.agents.tools.calendar_tools.build_calendar_service",
         new_callable=AsyncMock,
         return_value=mock_service,
     )
@@ -411,7 +413,7 @@ class TestGetCurrentDatetime:
 
     async def test_should_return_error_when_no_credentials(self) -> None:
         with patch(
-            "app.agents.tools.calendar_tools._build_service",
+            "app.agents.tools.calendar_tools.build_calendar_service",
             new_callable=AsyncMock,
             return_value="No Google token found — please sign in.",
         ):
@@ -802,14 +804,14 @@ class TestGetLlm:
 class TestRefreshLockBounding:
     @pytest.fixture(autouse=True)
     def _clear_locks(self) -> None:  # pyright: ignore[reportUnusedFunction]
-        from app.agents.tools.calendar_tools import (
+        from app.auth.google_credentials import (
             _refresh_locks,  # pyright: ignore[reportPrivateUsage]
         )
 
         _refresh_locks.clear()
 
     def test_returns_same_lock_for_same_user(self) -> None:
-        from app.agents.tools.calendar_tools import (
+        from app.auth.google_credentials import (
             _get_refresh_lock,  # pyright: ignore[reportPrivateUsage]
         )
 
@@ -818,7 +820,7 @@ class TestRefreshLockBounding:
         assert lock1 is lock2
 
     def test_bounded_to_maxsize(self) -> None:
-        from app.agents.tools.calendar_tools import (
+        from app.auth.google_credentials import (
             _REFRESH_LOCK_MAXSIZE,  # pyright: ignore[reportPrivateUsage]
             _get_refresh_lock,  # pyright: ignore[reportPrivateUsage]
             _refresh_locks,  # pyright: ignore[reportPrivateUsage]
@@ -829,7 +831,7 @@ class TestRefreshLockBounding:
         assert len(_refresh_locks) == _REFRESH_LOCK_MAXSIZE
 
     def test_evicts_oldest_entry(self) -> None:
-        from app.agents.tools.calendar_tools import (
+        from app.auth.google_credentials import (
             _REFRESH_LOCK_MAXSIZE,  # pyright: ignore[reportPrivateUsage]
             _get_refresh_lock,  # pyright: ignore[reportPrivateUsage]
             _refresh_locks,  # pyright: ignore[reportPrivateUsage]
@@ -841,7 +843,7 @@ class TestRefreshLockBounding:
         assert "oldest-user" not in _refresh_locks
 
     def test_lru_access_prevents_eviction(self) -> None:
-        from app.agents.tools.calendar_tools import (
+        from app.auth.google_credentials import (
             _REFRESH_LOCK_MAXSIZE,  # pyright: ignore[reportPrivateUsage]
             _get_refresh_lock,  # pyright: ignore[reportPrivateUsage]
             _refresh_locks,  # pyright: ignore[reportPrivateUsage]

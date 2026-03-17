@@ -75,14 +75,12 @@ async def store_sync_metadata(user_id: str, metadata: SyncMetadata) -> None:
 async def _get_calendar_service(user_id: str) -> Any:
     """Build a Google Calendar API service for the given user.
 
-    Reuses credential handling from calendar_tools to avoid duplicating
-    token refresh logic. Raises RuntimeError on failure.
+    Reuses credential handling from the shared google_credentials module
+    to avoid duplicating token refresh logic. Raises RuntimeError on failure.
     """
-    from app.agents.tools.calendar_tools import (
-        _build_service,  # pyright: ignore[reportPrivateUsage]
-    )
+    from app.auth.google_credentials import build_calendar_service
 
-    service = await _build_service(user_id)
+    service = await build_calendar_service(user_id)
     if isinstance(service, str):
         raise RuntimeError(service)
     return service
