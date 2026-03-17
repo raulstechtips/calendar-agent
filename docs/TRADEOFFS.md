@@ -320,3 +320,74 @@ If the architecture adds Postgres for user profiles or other durable state, sync
 - Redis failover event causes visible re-ingest storm (mass `"Starting full ingest"` logs)
 - Scaling beyond 10 active users
 - Moving to multi-replica deployment where Redis persistence becomes critical
+
+---
+
+## 5. Prompt Injection Defense — Regex-Only vs Azure Prompt Shields
+
+**Date:** 2026-03-17
+**Audit finding:** W10
+**File:** `backend/app/agents/guardrails.py`
+
+### The problem
+
+The SPEC defines the input guard as "Prompt Shields + regex." Azure Prompt Shields is Microsoft's dedicated ML model for detecting direct and indirect prompt injection attacks. The current implementation uses regex pattern matching for injection detection and Azure Content Safety harm categories (HATE, SELF_HARM, SEXUAL, VIOLENCE) for content moderation — but these are different APIs serving different purposes. Harm categories detect toxic content, not injection attempts.
+
+### What we built (MVP)
+
+Two-layer input defense:
+1. **Regex patterns** — detect common injection markers (`ignore previous`, `system:`, delimiter sequences, role-play attempts, canary token leakage)
+2. **Azure Content Safety** — blocks harmful content (hate, self-harm, sexual, violence) via the `analyze_text` API
+
+The output guard also uses Content Safety to filter agent responses.
+
+### Why this is sufficient for now
+
+- The sandwich defense prompt pattern (system → user → system reminder) provides structural protection independent of the input guard
+- Regex catches the most common injection patterns (instruction overrides, role hijacking)
+- The agent is scoped to calendar operations with bounded tools — even a successful injection can only call `search_events`, `create_event`, `update_event`, `delete_event` (all gated by human-in-the-loop confirmation for writes)
+- Canary token detection catches extraction attempts
+- The attack surface is limited: single-user context, no cross-user data access (user_id filter enforced)
+
+### When this breaks
+
+- Sophisticated indirect injection via calendar event descriptions (e.g., a shared calendar event containing crafted instructions)
+- Adversarial users who iterate on bypassing regex patterns
+- Compliance requirements that mandate ML-based injection detection
+- Adding tools with broader capabilities (email send, file access) that increase the blast radius of a successful injection
+
+### The upgrade path — Azure Prompt Shields
+
+Prompt Shields is available on the same Content Safety resource already deployed. The API call is similar to the existing `analyze_text`:
+
+```python
+from azure.ai.contentsafety.models import AnalyzeTextOptions
+
+# Current: harm category detection
+result = client.analyze_text(AnalyzeTextOptions(text=user_input))
+
+# Addition: prompt injection detection
+# Uses the same client, same endpoint, different API
+shield_result = client.analyze_text(
+    AnalyzeTextOptions(
+        text=user_input,
+        categories=[],  # skip harm categories
+        output_type="EightSeverityLevels",
+    )
+)
+# Or use the dedicated Prompt Shields endpoint:
+# POST {endpoint}/text/shieldPrompt?api-version=2024-09-01
+```
+
+Key details:
+- **No new Azure resource** — uses the existing Content Safety deployment
+- **~50ms additional latency** per message (runs in parallel with existing harm check)
+- **No new RBAC roles** — the backend identity already has `Cognitive Services User` on Content Safety
+- Can run both checks concurrently with `asyncio.gather` to minimize latency impact
+
+### Trigger to upgrade
+
+- Evidence of injection attempts bypassing regex (visible in logs from the `input_guard` node)
+- Adding tools with higher blast radius (email, file access)
+- Moving toward multi-tenant or enterprise deployment
+- Security audit or compliance review requiring ML-based injection defense

@@ -33,7 +33,7 @@ Azure OpenAI (GPT-4o) as LLM backbone, Azure AI Search as vector store.
 
 - Functional React components with hooks only; server components by default
 - Python: async/await for all I/O, type hints everywhere, Pydantic v2 models
-- All frontend API calls through `frontend/src/lib/api.ts` — never call backend directly from components
+- All backend calls are server-side — the browser never contacts the backend directly. Regular API calls go through `api.ts`; SSE streams go through the Next.js route handler proxy at `/api/chat`; client-initiated mutations use Server Actions
 - ES modules only — NEVER use CommonJS require()
 - NEVER install new dependencies without asking first
 - Conventional commits: `feat(scope):`, `fix(scope):`, `refactor(scope):`, etc.
