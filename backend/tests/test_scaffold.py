@@ -1,6 +1,7 @@
 """Tests for FastAPI scaffold: health endpoint, CORS, request ID, rate limiting."""
 
 from collections.abc import AsyncGenerator
+from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
@@ -19,7 +20,10 @@ async def client() -> AsyncGenerator[httpx.AsyncClient, None]:
 
 class TestHealthEndpoint:
     async def test_health_returns_ok(self, client: httpx.AsyncClient) -> None:
-        response = await client.get("/health")
+        mock_redis = AsyncMock()
+        mock_redis.ping.return_value = True
+        with patch("app.main.get_redis", return_value=mock_redis):
+            response = await client.get("/health")
         assert response.status_code == 200
         assert response.json()["status"] == "ok"
 
@@ -28,6 +32,50 @@ class TestHealthEndpoint:
     ) -> None:
         response = await client.get("/health")
         assert "application/json" in response.headers["content-type"]
+
+    async def test_health_returns_503_when_redis_down(
+        self, client: httpx.AsyncClient
+    ) -> None:
+        mock_redis = AsyncMock()
+        mock_redis.ping.side_effect = ConnectionError("Redis unavailable")
+        with patch("app.main.get_redis", return_value=mock_redis):
+            response = await client.get("/health")
+        assert response.status_code == 503
+        body = response.json()
+        assert body["status"] == "degraded"
+        assert body["redis"] == "error"
+
+
+class TestGoogleTransportCleanup:
+    def test_close_google_transport_closes_session(self) -> None:
+        from unittest.mock import MagicMock
+
+        from app.auth import dependencies
+
+        # Ensure clean state (async fixture teardown from prior tests may interleave)
+        dependencies._google_transport = None
+        transport = dependencies._get_google_transport()
+        mock_session = MagicMock()
+        transport.session = mock_session
+        dependencies.close_google_transport()
+        # GoogleAuthRequest.__del__ also calls session.close(), so assert ≥1 call
+        assert mock_session.close.called
+        assert dependencies._google_transport is None
+
+    def test_close_google_transport_resets_global(self) -> None:
+        from app.auth import dependencies
+
+        dependencies._get_google_transport()
+        assert dependencies._google_transport is not None
+        dependencies.close_google_transport()
+        assert dependencies._google_transport is None
+
+    def test_close_google_transport_noop_when_none(self) -> None:
+        from app.auth import dependencies
+
+        dependencies._google_transport = None
+        dependencies.close_google_transport()
+        assert dependencies._google_transport is None
 
 
 class TestCORS:
@@ -57,6 +105,28 @@ class TestCORS:
             },
         )
         assert response.headers.get("access-control-allow-origin") != "http://evil.com"
+
+    async def test_cors_allows_post_method(self, client: httpx.AsyncClient) -> None:
+        response = await client.options(
+            "/health",
+            headers={
+                "Origin": "http://localhost:3000",
+                "Access-Control-Request-Method": "POST",
+            },
+        )
+        allowed = response.headers.get("access-control-allow-methods", "")
+        assert "POST" in allowed
+
+    async def test_cors_rejects_put_method(self, client: httpx.AsyncClient) -> None:
+        response = await client.options(
+            "/health",
+            headers={
+                "Origin": "http://localhost:3000",
+                "Access-Control-Request-Method": "PUT",
+            },
+        )
+        allowed = response.headers.get("access-control-allow-methods", "")
+        assert "PUT" not in allowed
 
     async def test_cors_allows_credentials(self, client: httpx.AsyncClient) -> None:
         response = await client.options(

@@ -36,6 +36,14 @@ def _get_google_transport() -> GoogleAuthRequest:
     return _google_transport
 
 
+def close_google_transport() -> None:
+    """Close the cached Google auth transport and its underlying HTTP session."""
+    global _google_transport  # noqa: PLW0603
+    if _google_transport is not None:
+        _google_transport.session.close()
+        _google_transport = None
+
+
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),  # noqa: B008
 ) -> UserResponse:
