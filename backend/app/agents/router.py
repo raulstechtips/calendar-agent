@@ -8,7 +8,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from langchain_core.messages import AIMessageChunk, HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Command
 from pydantic import BaseModel, ConfigDict, Field
@@ -82,7 +82,7 @@ async def _stream_response(
     buf = ""
 
     try:
-        async for chunk, _metadata in agent.astream(
+        async for _ns, (chunk, _metadata) in agent.astream(  # type: ignore[misc]
             {
                 "messages": [HumanMessage(content=message)],
                 "user_id": user_id,
@@ -91,6 +91,7 @@ async def _stream_response(
             },
             config={"configurable": {"thread_id": thread_id}},
             stream_mode="messages",
+            subgraphs=True,
         ):
             # Short-circuit on scope error from calendar tools (#94)
             if (
@@ -114,7 +115,7 @@ async def _stream_response(
                 yield f"data: {json.dumps(scope_done)}\n\n"
                 return
 
-            if not (isinstance(chunk, AIMessageChunk) and chunk.content):
+            if not (isinstance(chunk, AIMessage) and chunk.content):
                 continue
 
             # Emit "blocked" event for guard node responses
