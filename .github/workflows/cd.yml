@@ -74,7 +74,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: ACR login
-        run: az acr login --name ${{ vars.ACR_NAME }}
+        run: az acr login --name ${{ secrets.ACR_NAME }}
 
       - name: Set build ID
         run: echo "BUILD_ID=${GITHUB_SHA::7}-${{ github.run_number }}-${{ github.run_attempt }}" >> "$GITHUB_ENV"
@@ -87,7 +87,7 @@ jobs:
           github.event.inputs.deploy_frontend == 'true'
         run: |
           VERSION="${{ needs.detect-changes.outputs.frontend_version }}"
-          IMAGE="${{ vars.ACR_LOGIN_SERVER }}/frontend"
+          IMAGE="${{ secrets.ACR_LOGIN_SERVER }}/frontend"
           docker build \
             -t "${IMAGE}:${VERSION}-${BUILD_ID}" \
             -t "${IMAGE}:${VERSION}" \
@@ -103,9 +103,9 @@ jobs:
           VERSION="${{ needs.detect-changes.outputs.frontend_version }}"
           VERSION_DASHES="${VERSION//./-}"
           az containerapp update \
-            --name ${{ vars.FRONTEND_APP_NAME }} \
-            --resource-group ${{ vars.RESOURCE_GROUP }} \
-            --image "${{ vars.ACR_LOGIN_SERVER }}/frontend:${VERSION}-${BUILD_ID}" \
+            --name ${{ secrets.FRONTEND_APP_NAME }} \
+            --resource-group ${{ secrets.RESOURCE_GROUP }} \
+            --image "${{ secrets.ACR_LOGIN_SERVER }}/frontend:${VERSION}-${BUILD_ID}" \
             --revision-suffix "v${VERSION_DASHES}-${BUILD_ID}"
 
       # --- Backend ---
@@ -116,7 +116,7 @@ jobs:
           github.event.inputs.deploy_backend == 'true'
         run: |
           VERSION="${{ needs.detect-changes.outputs.backend_version }}"
-          IMAGE="${{ vars.ACR_LOGIN_SERVER }}/backend"
+          IMAGE="${{ secrets.ACR_LOGIN_SERVER }}/backend"
           docker build \
             --target production \
             -t "${IMAGE}:${VERSION}-${BUILD_ID}" \
@@ -133,7 +133,7 @@ jobs:
           VERSION="${{ needs.detect-changes.outputs.backend_version }}"
           VERSION_DASHES="${VERSION//./-}"
           az containerapp update \
-            --name ${{ vars.BACKEND_APP_NAME }} \
-            --resource-group ${{ vars.RESOURCE_GROUP }} \
-            --image "${{ vars.ACR_LOGIN_SERVER }}/backend:${VERSION}-${BUILD_ID}" \
+            --name ${{ secrets.BACKEND_APP_NAME }} \
+            --resource-group ${{ secrets.RESOURCE_GROUP }} \
+            --image "${{ secrets.ACR_LOGIN_SERVER }}/backend:${VERSION}-${BUILD_ID}" \
             --revision-suffix "v${VERSION_DASHES}-${BUILD_ID}"
