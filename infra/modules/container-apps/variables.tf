@@ -214,4 +214,9 @@ variable "acr_sku" {
 variable "github_repo_name" {
   description = "GitHub repository in org/repo format for OIDC federated credentials"
   type        = string
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$", var.github_repo_name))
+    error_message = "github_repo_name must be in org/repo format (e.g., myorg/calendar-agent)."
+  }
 }
