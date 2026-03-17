@@ -61,6 +61,7 @@ export interface PendingConfirmation {
   actionId: string;
   action: string;
   details: Record<string, unknown>;
+  status: "pending" | "confirmed" | "cancelled";
 }
 
 export interface ScopeRequired {
