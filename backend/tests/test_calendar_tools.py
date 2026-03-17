@@ -847,15 +847,14 @@ class TestRefreshLockBounding:
             _refresh_locks,  # pyright: ignore[reportPrivateUsage]
         )
 
-        # Fill to capacity - 1
+        # Add target first so it becomes the oldest entry
+        _get_refresh_lock("target-user")
         for i in range(_REFRESH_LOCK_MAXSIZE - 1):
             _get_refresh_lock(f"user-{i}")
 
-        # Add target user (oldest after the loop)
-        _get_refresh_lock("target-user")
         assert len(_refresh_locks) == _REFRESH_LOCK_MAXSIZE
 
-        # Access target user to promote it (LRU)
+        # Access target user to promote it out of the oldest position
         _get_refresh_lock("target-user")
 
         # Add one more to trigger eviction — should evict user-0 (oldest), not target
