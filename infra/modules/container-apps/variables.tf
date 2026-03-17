@@ -216,7 +216,11 @@ variable "github_repo_name" {
   type        = string
 
   validation {
-    condition     = can(regex("^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$", var.github_repo_name))
-    error_message = "github_repo_name must be in org/repo format (e.g., myorg/calendar-agent)."
+    condition = (
+      length(split("/", var.github_repo_name)) == 2 &&
+      can(regex("^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$", split("/", var.github_repo_name)[0])) &&
+      can(regex("^[A-Za-z0-9._-]{1,100}$", split("/", var.github_repo_name)[1]))
+    )
+    error_message = "github_repo_name must be owner/repo: owner (alphanumeric + hyphens, max 39 chars), repo (alphanumeric + hyphen/underscore/dot, max 100 chars)."
   }
 }
