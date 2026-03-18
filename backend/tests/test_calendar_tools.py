@@ -329,6 +329,22 @@ class TestBuildService:
             result = await build_calendar_service(FAKE_USER_ID)
             assert not isinstance(result, str)
 
+    async def test_should_call_get_token_once_when_building_service(self) -> None:
+        token = _make_stored_token()
+        with (
+            patch(
+                "app.auth.google_credentials.get_token",
+                new_callable=AsyncMock,
+                return_value=token,
+            ) as mock_get_token,
+            patch(
+                "app.auth.google_credentials.build",
+                return_value=MagicMock(),
+            ),
+        ):
+            await build_calendar_service(FAKE_USER_ID)
+            mock_get_token.assert_called_once_with(FAKE_USER_ID)
+
 
 class TestHttpErrorDetection:
     def _make_http_error(self, status: int, content: bytes) -> Any:

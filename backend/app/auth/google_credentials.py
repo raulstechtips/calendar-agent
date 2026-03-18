@@ -132,18 +132,27 @@ async def _refresh_token_for_tool(
     return updated
 
 
-async def get_google_credentials(user_id: str) -> Credentials | str:
+async def get_google_credentials(
+    user_id: str, stored_token: StoredToken | None = None
+) -> Credentials | str:
     """Retrieve user's Google OAuth credentials, refreshing if expired.
 
     Returns google.oauth2.credentials.Credentials on success,
     or an error message string on failure.
+
+    Args:
+        user_id: The user's Google sub claim.
+        stored_token: Optional pre-fetched token to avoid redundant Redis calls.
     """
-    try:
-        stored = await get_token(user_id)
-    except TokenNotFoundError:
-        return "No Google token found — please sign in and grant calendar access."
-    except TokenEncryptionError:
-        return "Failed to retrieve Google token — please re-authenticate."
+    if stored_token is not None:
+        stored = stored_token
+    else:
+        try:
+            stored = await get_token(user_id)
+        except TokenNotFoundError:
+            return "No Google token found — please sign in and grant calendar access."
+        except TokenEncryptionError:
+            return "Failed to retrieve Google token — please re-authenticate."
 
     # Refresh if expired (with 60s buffer), using a per-user lock
     # to prevent concurrent refreshes from racing on the same token
@@ -177,6 +186,7 @@ async def build_calendar_service(user_id: str) -> Any | str:
     or an error message string on failure.
     """
     # Pre-check: verify calendar scope before making a doomed API call
+    stored: StoredToken | None = None
     try:
         stored = await get_token(user_id)
         if CALENDAR_EVENTS_SCOPE not in stored.scopes:
@@ -189,7 +199,7 @@ async def build_calendar_service(user_id: str) -> Any | str:
     except (TokenNotFoundError, TokenEncryptionError):
         pass  # get_google_credentials will handle with a proper error message
 
-    creds = await get_google_credentials(user_id)
+    creds = await get_google_credentials(user_id, stored_token=stored)
     if isinstance(creds, str):
         return creds
 

@@ -242,6 +242,7 @@ class TestBuildSearchDocument:
 
         event = _make_event(event_id="cal-event-123")
         doc = build_search_document(event, "some content", [0.1] * 1536)
+        assert doc is not None
         assert doc["id"] == "cal-event-123"
 
     @patch(
@@ -253,6 +254,7 @@ class TestBuildSearchDocument:
 
         event = _make_event()
         doc = build_search_document(event, "content", [0.1] * 1536)
+        assert doc is not None
         assert doc["source_type"] == "event"
 
     @patch(
@@ -264,6 +266,7 @@ class TestBuildSearchDocument:
 
         event = _make_event()
         doc = build_search_document(event, "formatted text here", [0.1] * 1536)
+        assert doc is not None
         assert doc["content"] == "formatted text here"
 
     @patch(
@@ -276,6 +279,7 @@ class TestBuildSearchDocument:
         embedding = [0.5] * 1536
         event = _make_event()
         doc = build_search_document(event, "content", embedding)
+        assert doc is not None
         assert doc["embedding"] == embedding
 
     @patch(
@@ -287,6 +291,7 @@ class TestBuildSearchDocument:
 
         event = _make_event(start_dt="2026-03-16T09:00:00-04:00")
         doc = build_search_document(event, "content", [0.1] * 1536)
+        assert doc is not None
         assert doc["timestamp"] == "2026-03-16T09:00:00-04:00"
 
     @patch(
@@ -300,7 +305,35 @@ class TestBuildSearchDocument:
 
         event = _make_event()
         doc = build_search_document(event, "content", [0.1] * 1536)
+        assert doc is not None
         assert doc["last_modified"] == "2026-03-16T12:00:00+00:00"
+
+    @patch(
+        "app.search.embeddings._utc_now",
+        return_value=FROZEN_NOW,
+    )
+    def test_should_return_none_for_event_without_id(
+        self, _mock_now: MagicMock
+    ) -> None:
+        from app.search.embeddings import build_search_document
+
+        event: dict[str, Any] = {"summary": "No ID event", "start": {}, "end": {}}
+        result = build_search_document(event, "content", [0.1] * 1536)
+        assert result is None
+
+    @patch(
+        "app.search.embeddings._utc_now",
+        return_value=FROZEN_NOW,
+    )
+    def test_should_log_warning_for_event_without_id(
+        self, _mock_now: MagicMock, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        from app.search.embeddings import build_search_document
+
+        event: dict[str, Any] = {"summary": "Ghost Event", "start": {}, "end": {}}
+        with caplog.at_level(logging.WARNING):
+            build_search_document(event, "content", [0.1] * 1536)
+        assert any("Ghost Event" in r.message for r in caplog.records)
 
 
 class TestProcessEvents:
@@ -393,6 +426,34 @@ class TestProcessEvents:
 
         with pytest.raises(RuntimeError, match="Azure OpenAI unavailable"):
             await process_events(user_id="user-123", events=[_make_event()])
+
+    @patch("app.search.embeddings.upsert_documents", new_callable=AsyncMock)
+    @patch("app.search.embeddings.get_embeddings_client")
+    async def test_should_skip_events_without_id_in_batch(
+        self, mock_get_client: MagicMock, mock_upsert: AsyncMock
+    ) -> None:
+        from app.search.embeddings import process_events
+
+        mock_client = AsyncMock()
+        mock_client.aembed_documents = AsyncMock(
+            return_value=[[0.1] * 1536, [0.2] * 1536, [0.3] * 1536]
+        )
+        mock_get_client.return_value = mock_client
+        mock_upsert.return_value = ["evt-1", "evt-3"]
+
+        events: list[dict[str, Any]] = [
+            _make_event(event_id="evt-1"),
+            {"summary": "No ID", "start": {}, "end": {}},  # missing id
+            _make_event(event_id="evt-3"),
+        ]
+        result = await process_events(user_id="user-123", events=events)
+
+        assert result == ["evt-1", "evt-3"]
+        # Upsert should only receive 2 documents (the one without ID is skipped)
+        upsert_call_args = mock_upsert.call_args
+        docs = upsert_call_args.args[1]
+        assert len(docs) == 2
+        assert all(d["id"] in ("evt-1", "evt-3") for d in docs)
 
 
 class TestDeleteEvents:

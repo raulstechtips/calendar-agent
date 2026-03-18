@@ -35,7 +35,10 @@ Azure OpenAI (GPT-4o) as LLM backbone, Azure AI Search as vector store.
 - Python: async/await for all I/O, type hints everywhere, Pydantic v2 models
 - All backend calls are server-side — the browser never contacts the backend directly. Regular API calls go through `api.ts`; SSE streams go through the Next.js route handler proxy at `/api/chat`; client-initiated mutations use Server Actions
 - ES modules only — NEVER use CommonJS require()
-- NEVER install new dependencies without asking first
+- NEVER depend on transitive dependencies — if you `import` a package in production code, it MUST be listed in `pyproject.toml` with a pinned version
+- ALL dependencies MUST use exact version pins (`==`) — this is an application, not a library; upgrades must be explicit and intentional
+- To upgrade a dependency: update the version in `pyproject.toml`, run `uv lock --upgrade-package <pkg>`, run tests, commit both files
+- NEVER install new dependencies without asking the developer first
 - Conventional commits: `feat(scope):`, `fix(scope):`, `refactor(scope):`, etc.
 
 ## Workflow
