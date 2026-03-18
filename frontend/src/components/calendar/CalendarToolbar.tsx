@@ -56,9 +56,9 @@ export default function CalendarToolbar({
   const viewLabel = view === "week" ? "week" : "day";
 
   return (
-    <div className="flex items-center justify-between border-b px-4 py-2">
-      <div className="flex items-center gap-2">
-        <Button variant="outline" size="sm" onClick={goToToday}>
+    <div className="flex items-center justify-between border-b border-border/60 px-5 py-3">
+      <div className="flex items-center gap-3">
+        <Button variant="outline" size="sm" className="font-medium shadow-sm" onClick={goToToday}>
           Today
         </Button>
         <div className="flex items-center gap-0.5">
@@ -79,7 +79,7 @@ export default function CalendarToolbar({
             <ChevronRight />
           </Button>
         </div>
-        <h2 className="text-sm font-semibold">{label}</h2>
+        <h2 className="text-lg font-semibold tracking-tight">{label}</h2>
       </div>
       <Tabs
         value={view}

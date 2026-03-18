@@ -378,11 +378,17 @@ export function computeEventLanes(events: CalendarEvent[]): EventWithLane[] {
     );
   });
 
-  const lanes: Array<{ event: CalendarEvent; endTime: number }[]> = [];
+  // Pre-compute timestamps
+  const times = sorted.map((e) => ({
+    start: new Date(e.start).getTime(),
+    end: new Date(e.end).getTime(),
+  }));
+
+  const lanes: Array<{ endTime: number }[]> = [];
 
   // Assign each event to the first available lane
-  const assignments = sorted.map((event) => {
-    const startTime = new Date(event.start).getTime();
+  const laneAssignments = sorted.map((event, i) => {
+    const startTime = times[i]!.start;
     let laneIndex = lanes.findIndex((lane) => {
       const lastInLane = lane[lane.length - 1];
       return lastInLane !== undefined && lastInLane.endTime <= startTime;
@@ -393,30 +399,49 @@ export function computeEventLanes(events: CalendarEvent[]): EventWithLane[] {
       lanes.push([]);
     }
 
-    lanes[laneIndex]!.push({ event, endTime: new Date(event.end).getTime() });
-    return { event, lane: laneIndex };
+    lanes[laneIndex]!.push({ endTime: times[i]!.end });
+    return laneIndex;
   });
 
-  // Build conflict groups to determine totalLanes per event
-  const result: EventWithLane[] = [];
-  for (const { event, lane } of assignments) {
-    const startTime = new Date(event.start).getTime();
-    const endTime = new Date(event.end).getTime();
-
-    // Count how many lanes overlap with this event's time range
-    let maxLane = lane;
-    for (const otherAssignment of assignments) {
-      const otherStart = new Date(otherAssignment.event.start).getTime();
-      const otherEnd = new Date(otherAssignment.event.end).getTime();
-      if (otherStart < endTime && otherEnd > startTime) {
-        maxLane = Math.max(maxLane, otherAssignment.lane);
-      }
+  // Build conflict clusters via union-find so events only share lane
+  // counts with events they transitively overlap with
+  const parent = sorted.map((_, i) => i);
+  function find(x: number): number {
+    while (parent[x] !== x) {
+      parent[x] = parent[parent[x]!]!;
+      x = parent[x]!;
     }
-
-    result.push({ event, lane, totalLanes: maxLane + 1 });
+    return x;
+  }
+  function union(a: number, b: number) {
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) parent[ra] = rb;
   }
 
-  return result;
+  // Union events that overlap in time
+  for (let i = 0; i < sorted.length; i++) {
+    for (let j = i + 1; j < sorted.length; j++) {
+      if (times[j]!.start >= times[i]!.end) break; // sorted, no further overlaps
+      if (times[j]!.start < times[i]!.end && times[j]!.end > times[i]!.start) {
+        union(i, j);
+      }
+    }
+  }
+
+  // For each cluster, compute totalLanes = max lane in cluster + 1
+  const clusterMaxLane = new Map<number, number>();
+  for (let i = 0; i < sorted.length; i++) {
+    const root = find(i);
+    const lane = laneAssignments[i]!;
+    clusterMaxLane.set(root, Math.max(clusterMaxLane.get(root) ?? 0, lane));
+  }
+
+  return sorted.map((event, i) => ({
+    event,
+    lane: laneAssignments[i]!,
+    totalLanes: clusterMaxLane.get(find(i))! + 1,
+  }));
 }
 
 /** Parse a date string from URL params, falling back to today. */

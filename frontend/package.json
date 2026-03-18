@@ -10,7 +10,8 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "e2e:screenshots": "E2E_MOCK_SESSION=true pnpm exec playwright test e2e/screenshots.spec.mts"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",
@@ -26,6 +27,7 @@
     "tw-animate-css": "^1.4.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

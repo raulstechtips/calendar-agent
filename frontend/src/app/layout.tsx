@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -15,6 +15,13 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Calendar Assistant",
   description: "AI-powered calendar management assistant",
+};
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f5fafa" },
+    { media: "(prefers-color-scheme: dark)", color: "#1e2430" },
+  ],
 };
 
 export default function RootLayout({

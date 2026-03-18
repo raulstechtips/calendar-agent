@@ -6,6 +6,7 @@ import {
   clipToDay,
   computeEventLanes,
   getEventPosition,
+  overlapsDay,
   type CalendarEvent,
 } from "@/lib/calendar";
 
@@ -19,12 +20,17 @@ interface DayViewProps {
 }
 
 export default function DayView({ events, date, onEventClick }: DayViewProps) {
-  const allDayEvents = events.filter((e) => e.isAllDay);
-  const timedEvents = events.filter((e) => !e.isAllDay);
-
+  const dayEvents = useMemo(
+    () => events.filter((e) => overlapsDay(e.start, e.end, date)),
+    [events, date],
+  );
+  const allDayEvents = useMemo(
+    () => dayEvents.filter((e) => e.isAllDay),
+    [dayEvents],
+  );
   const lanedEvents = useMemo(
-    () => computeEventLanes(timedEvents),
-    [timedEvents],
+    () => computeEventLanes(dayEvents.filter((e) => !e.isAllDay)),
+    [dayEvents],
   );
 
   return (

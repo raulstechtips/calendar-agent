@@ -38,25 +38,26 @@ export default function WeekView({
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Day headers */}
-      <div className="flex border-b">
-        <div className="w-16 shrink-0 border-r" />
+      <div className="flex border-b border-border/60">
+        <div className="w-16 shrink-0 border-r border-border/50" />
         <div className="grid flex-1" style={{ gridTemplateColumns: `repeat(${DAYS_IN_WEEK}, 1fr)` }}>
           {days.map((day, i) => (
             <div
               key={i}
               className={cn(
-                "border-l border-border/50 px-1 py-2 text-center text-xs first:border-l-0",
-                isSameDay(day, today) && "bg-primary/5",
+                "border-l border-border/30 px-1 py-2.5 text-center first:border-l-0",
+                isSameDay(day, today) && "bg-primary/[0.06]",
               )}
             >
-              <div className="text-muted-foreground">
+              <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                 {day.toLocaleDateString("en-US", { weekday: "short" })}
               </div>
               <div
                 className={cn(
-                  "mx-auto mt-0.5 flex size-7 items-center justify-center rounded-full text-sm font-semibold",
-                  isSameDay(day, today) &&
-                    "bg-primary text-primary-foreground",
+                  "mx-auto mt-1 flex size-8 items-center justify-center rounded-full text-sm font-semibold",
+                  isSameDay(day, today)
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-foreground",
                 )}
               >
                 {day.getDate()}

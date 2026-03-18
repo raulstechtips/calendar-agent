@@ -1,6 +1,6 @@
+import { Settings } from "lucide-react";
 import { getUserProfile, getUserPreferences } from "@/lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import { ScopeManager } from "@/components/settings/ScopeManager";
 import { PreferencesForm } from "@/components/settings/PreferencesForm";
 import { DisconnectButton } from "@/components/settings/DisconnectButton";
@@ -24,15 +24,18 @@ export default async function SettingsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 p-6">
-      <div>
-        <h1 className="text-2xl font-bold">Settings</h1>
-        <p className="text-muted-foreground">
-          Manage your Google permissions and preferences.
-        </p>
+    <div className="mx-auto max-w-2xl space-y-6 p-6 pt-8">
+      <div className="flex items-center gap-3">
+        <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10">
+          <Settings className="size-5 text-primary" />
+        </div>
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">Settings</h1>
+          <p className="text-sm text-muted-foreground">
+            Manage your Google permissions and preferences.
+          </p>
+        </div>
       </div>
-
-      <Separator />
 
       <section aria-label="Google Account">
         <Card>

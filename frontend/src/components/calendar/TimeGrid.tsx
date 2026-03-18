@@ -7,6 +7,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 
 const HOUR_HEIGHT = 64;
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
+const WORKING_HOUR_START = 9;
+const WORKING_HOUR_END = 17; // 5 PM (exclusive — hours 9-16 get the tint)
 
 interface TimeGridProps {
   children: React.ReactNode;
@@ -43,14 +45,19 @@ export default function TimeGrid({ children, columns }: TimeGridProps) {
     <ScrollArea ref={scrollRef} className="flex-1">
       <div className="relative flex" style={{ minHeight: 24 * HOUR_HEIGHT }}>
         {/* Time labels column */}
-        <div className="sticky left-0 z-10 w-16 shrink-0 border-r bg-background">
+        <div className="sticky left-0 z-10 w-16 shrink-0 border-r border-border/50 bg-background">
           {HOURS.map((hour) => (
             <div
               key={hour}
-              className="relative border-b text-right text-[10px] text-muted-foreground"
+              className={cn(
+                "relative border-b border-border/40 text-right text-[11px] text-muted-foreground",
+                hour >= WORKING_HOUR_START &&
+                  hour < WORKING_HOUR_END &&
+                  "bg-primary/[0.03]",
+              )}
               style={{ height: HOUR_HEIGHT }}
             >
-              <span className="absolute -top-2 right-2">
+              <span className="absolute -top-2 right-2 font-medium">
                 {formatHourLabel(hour)}
               </span>
             </div>
@@ -59,13 +66,21 @@ export default function TimeGrid({ children, columns }: TimeGridProps) {
 
         {/* Grid area */}
         <div className="relative flex-1">
-          {/* Hour lines */}
+          {/* Hour rows with working hours band */}
           {HOURS.map((hour) => (
             <div
               key={hour}
-              className="border-b border-border/50"
+              className={cn(
+                "relative border-b border-border/40",
+                hour >= WORKING_HOUR_START &&
+                  hour < WORKING_HOUR_END &&
+                  "bg-primary/[0.03]",
+              )}
               style={{ height: HOUR_HEIGHT }}
-            />
+            >
+              {/* Half-hour dashed line */}
+              <div className="absolute left-0 right-0 top-1/2 border-t border-dashed border-border/25" />
+            </div>
           ))}
 
           {/* Column dividers for week view */}
@@ -88,8 +103,8 @@ export default function TimeGrid({ children, columns }: TimeGridProps) {
             className="pointer-events-none absolute left-0 right-0 z-20 flex items-center"
             style={{ top: currentTimeTop }}
           >
-            <div className="size-2 rounded-full bg-destructive" />
-            <div className="h-px flex-1 bg-destructive" />
+            <div className="size-2.5 rounded-full bg-destructive shadow-sm shadow-destructive/50" />
+            <div className="h-0.5 flex-1 bg-destructive shadow-sm shadow-destructive/50" />
           </div>
 
           {/* Events overlay */}

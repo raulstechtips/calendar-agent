@@ -28,6 +28,7 @@ Azure OpenAI (GPT-4o) as LLM backbone, Azure AI Search as vector store.
 - Add frontend dep: `cd frontend && pnpm add <pkg>`
 - Add backend dep: `cd backend && uv add <pkg>`
 - Add backend dev dep: `cd backend && uv add --group dev <pkg>`
+- UI screenshots: `cd frontend && pnpm e2e:screenshots` (outputs to `frontend/e2e/screenshots/`)
 
 ## Code Conventions
 
