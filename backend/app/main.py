@@ -1,5 +1,6 @@
 """FastAPI application entry point with middleware and lifespan management."""
 
+import asyncio
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -27,9 +28,32 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     get_redis()
     get_search_client()
     get_embeddings_client()
-    # Ensure search index exists (idempotent — safe on every startup)
-    await create_index()
-    logger.info("Search index ready")
+    # Ensure search index exists (idempotent — safe on every startup).
+    # Retry with backoff: the Azure managed identity sidecar may take a few
+    # seconds to become available on cold start.
+    max_retries = 3
+    delay = 30.0
+    for attempt in range(1, max_retries + 1):
+        try:
+            await create_index()
+            logger.info("Search index ready")
+            break
+        except Exception:
+            if attempt == max_retries:
+                logger.exception(
+                    "Search index creation failed after %d attempts",
+                    max_retries,
+                )
+                raise
+            logger.warning(
+                "Search index creation attempt %d/%d failed, retrying in %ds",
+                attempt,
+                max_retries,
+                int(delay),
+                exc_info=True,
+            )
+            await asyncio.sleep(delay)
+            delay *= 2
     yield
     # Shutdown: clean up connections (isolate exceptions so both always run)
     try:
