@@ -45,7 +45,7 @@ IMPORTANT: Follow these rules strictly:
 - ALWAYS read a file before editing it
 - ALWAYS run tests after making changes
 - ALWAYS run lint and typecheck before considering work done
-- Before writing code, read the active spec in `.claude/specs/in-progress/`
+- Before writing code, read the PRD at `.claude/prd/PRD.md` and the PI Plan at `.claude/pi/PI.md`
 - Track work via GitHub Issues — pick stories labeled `status:todo`, mark `status:in-progress`; when done update label to `status:done` and create a PR (the issue closes automatically when the PR merges)
 - Commit after each completed task with conventional commits referencing the issue number
 - If uncertain about approach, ASK before proceeding
@@ -55,17 +55,34 @@ IMPORTANT: Follow these rules strictly:
 
 - Auth: Auth.js v5 beta with Google OAuth, incremental consent, offline access for refresh tokens
 - Vector store: Single shared Azure AI Search index with `user_id` filter (not index-per-user)
-- Agent: LangGraph ReAct via `create_react_agent` + `langchain-google-community` tools
+- Agent: LangGraph ReAct via `create_react_agent` + custom `@tool` functions (not langchain-google-community — incompatible with multi-user credentials)
 - Gmail scope: Use `gmail.metadata` (Sensitive) not `gmail.readonly` (Restricted) to avoid annual security audit
 - Tokens: Fernet-encrypted Google OAuth tokens stored in Redis with TTL
 - Rate limiting: slowapi with Redis backend
 
 ## Skills (Slash Commands)
 
+### PRD & PI Management
+- `/create-prd` — Bootstrap a new PRD for a new repo
+- `/update-prd [section|decision]` — Record a design change or update a PRD section
+- `/plan-increment [theme]` — Close previous PI + plan the next one
+- `/update-pi [description]` — Update PI Plan when scope changes mid-sprint
+- `/close-pi` — Archive current PI, bake decisions into PRD, tag
+
+### Work Decomposition
+- `/create-epic [name]` — Create detailed epic + stub feature issues on GitHub
+- `/create-feature [#issue]` — Detail a feature + create stub story issues
+- `/detail-story [#issue]` — Add full acceptance criteria, file scope, deps to a story
+
+### Work Updates
+- `/update-epic [#issue]` — Modify epic scope, add/remove features
+- `/update-feature [#issue]` — Modify feature, add/remove stories
+- `/update-story [#issue]` — Modify story AC, deps, file scope
+
+### Execution
 - `/pick-task [area]` — Find the next unblocked story to work on
-- `/sync-issues [area]` — Check issue status against actual code state
-- `/update-decision` — Record an architecture/product decision into SPEC.md and update affected issues
-- `/review-coderabbit [PR#]` — Fetch and triage CodeRabbit review comments on a PR
+- `/sync-issues [area]` — Audit issue hierarchy, fix stale labels, validate deps
+- `/review-coderabbit [PR#]` — Fetch and triage CodeRabbit review comments
 
 ### Contextual Skills (Frontend)
 
@@ -79,11 +96,14 @@ Auto-available when working on `frontend/**`. See `.claude/rules/frontend.md` fo
 ## Decision Workflow
 
 When a decision is made (by the user or during implementation):
-1. Update SPEC.md first — it is the source of truth
-2. Update affected GitHub issues if scope changes
-3. CLAUDE.md only changes for new conventions or commands
+1. Update PRD.md first — it is the source of truth. Use `/update-prd` to record decisions.
+2. Update the PI Plan if scope changes affect the current increment
+3. Update affected GitHub issues if story/feature scope changes
+4. CLAUDE.md only changes for new conventions or commands
 
 ## Reference Docs
 
-- SPEC.md (source of truth): `.claude/specs/in-progress/SPEC.md` — tech stack, versions, architecture, API contracts, data models, decisions log
+- PRD (source of truth): `.claude/prd/PRD.md` — tech stack, versions, architecture, API contracts, data models, decisions log
+- PI Plan (current sprint): `.claude/pi/PI.md` — epics, features, dependency graph, worktree strategy
 - Human workflow: `docs/HUMAN-WORKFLOW.md` — how to launch agents, review, merge, manage the sprint
+- Design spec: `docs/superpowers/specs/2026-03-17-sdlc-skill-suite-design.md` — SDLC skill suite design
