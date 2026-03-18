@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Loader2 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { revokeAccess } from "@/actions/settings";
 import { Button } from "@/components/ui/button";
@@ -52,7 +53,7 @@ export function DisconnectButton() {
             onClick={handleConfirm}
             disabled={loading}
           >
-            {loading ? "Disconnecting..." : "Confirm"}
+            {loading ? <><Loader2 className="animate-spin" data-icon="inline-start" />Disconnecting...</> : "Confirm"}
           </Button>
           <Button
             variant="outline"

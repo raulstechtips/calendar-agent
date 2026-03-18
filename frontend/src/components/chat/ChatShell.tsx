@@ -65,6 +65,7 @@ export default function ChatShell() {
             void confirmAction(pendingConfirmation.actionId, false);
           }
         }}
+        onSend={sendMessage}
         onGrantScope={() => {
           void signIn(
             "google",

@@ -683,7 +683,7 @@ Install community skills for your tech stack. These are downloaded to `.agents/`
 # UI/Design skills (for any frontend project)
 pnpm dlx skills add shadcn/ui --yes
 pnpm dlx skills add vercel-labs/agent-skills --yes
-pnpm dlx skills add nextlevelbuilder/ui-ux-pro-max-skill --yes
+# frontend-design skill is built into Claude Code (Anthropic official)
 ```
 
 ### Cleanup Irrelevant Skills
@@ -700,7 +700,7 @@ rm -rf .agents/skills/{irrelevant-skill-name}
 
 Each skill adds to Claude's context. Keep to 3-4 skill packs maximum. Prioritize:
 1. **Framework-specific** (shadcn/ui, Vercel react-best-practices)
-2. **Design** (ui-ux-pro-max for design system generation)
+2. **Design** (frontend-design for opinionated UI/UX guidance)
 3. **Remove** anything not directly relevant to your stack
 
 ---

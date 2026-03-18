@@ -28,6 +28,7 @@ Azure OpenAI (GPT-4o) as LLM backbone, Azure AI Search as vector store.
 - Add frontend dep: `cd frontend && pnpm add <pkg>`
 - Add backend dep: `cd backend && uv add <pkg>`
 - Add backend dev dep: `cd backend && uv add --group dev <pkg>`
+- UI screenshots: `cd frontend && pnpm e2e:screenshots` (outputs to `frontend/e2e/screenshots/`)
 
 ## Code Conventions
 
@@ -75,7 +76,7 @@ IMPORTANT: Follow these rules strictly:
 Auto-available when working on `frontend/**`. See `.claude/rules/frontend.md` for usage guidance.
 
 - `shadcn` — shadcn/ui component management
-- `ui-ux-pro-max` — UI/UX design intelligence
+- `frontend-design` — Opinionated UI/UX design guidance (Anthropic official)
 - `vercel-react-best-practices` — React/Next.js performance patterns
 - `vercel-composition-patterns` — React component architecture
 
