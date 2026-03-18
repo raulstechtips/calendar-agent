@@ -374,8 +374,8 @@ resource "azurerm_container_app" "backend" {
         transport               = "HTTP"
         path                    = "/health"
         port                    = 8000
-        initial_delay           = 5
-        interval_seconds        = 5
+        initial_delay           = 60
+        interval_seconds        = 10
         timeout                 = 3
         failure_count_threshold = 30
       }
