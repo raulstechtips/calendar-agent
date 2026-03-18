@@ -120,6 +120,12 @@ resource "azurerm_role_assignment" "backend_search" {
   principal_id         = azurerm_user_assigned_identity.backend.principal_id
 }
 
+resource "azurerm_role_assignment" "backend_search_service" {
+  scope                = azurerm_search_service.this.id
+  role_definition_name = "Search Service Contributor"
+  principal_id         = azurerm_user_assigned_identity.backend.principal_id
+}
+
 resource "azurerm_role_assignment" "backend_content_safety" {
   scope                = azurerm_cognitive_account.content_safety.id
   role_definition_name = "Cognitive Services User"

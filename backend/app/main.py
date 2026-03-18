@@ -1,6 +1,5 @@
 """FastAPI application entry point with middleware and lifespan management."""
 
-import asyncio
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -14,7 +13,6 @@ from app.auth.router import router as auth_router
 from app.core.middleware import setup_middleware
 from app.core.redis import close_redis, get_redis
 from app.search.embeddings import close_embeddings_client, get_embeddings_client
-from app.search.index import create_index
 from app.search.service import close_search_client, get_search_client
 from app.users.router import router as users_router
 
@@ -24,36 +22,12 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    # Startup: eagerly create clients (connections are lazy on first command)
+    # Startup: eagerly create clients (connections are lazy on first command).
+    # Search index creation is handled by the entrypoint script before uvicorn
+    # starts, so it runs exactly once instead of once per worker.
     get_redis()
     get_search_client()
     get_embeddings_client()
-    # Ensure search index exists (idempotent — safe on every startup).
-    # Retry with backoff: the Azure managed identity sidecar may take a few
-    # seconds to become available on cold start.
-    max_retries = 3
-    delay = 30.0
-    for attempt in range(1, max_retries + 1):
-        try:
-            await create_index()
-            logger.info("Search index ready")
-            break
-        except Exception:
-            if attempt == max_retries:
-                logger.exception(
-                    "Search index creation failed after %d attempts",
-                    max_retries,
-                )
-                raise
-            logger.warning(
-                "Search index creation attempt %d/%d failed, retrying in %ds",
-                attempt,
-                max_retries,
-                int(delay),
-                exc_info=True,
-            )
-            await asyncio.sleep(delay)
-            delay *= 2
     yield
     # Shutdown: clean up connections (isolate exceptions so both always run)
     try:

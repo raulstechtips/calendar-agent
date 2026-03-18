@@ -14,6 +14,7 @@ RUN groupadd --system --gid 1001 appgroup && \
 
 COPY --from=builder /app/.venv /app/.venv
 COPY app/ ./app/
+COPY scripts/ ./scripts/
 
 ENV PATH="/app/.venv/bin:$PATH"
 EXPOSE 8000
@@ -35,4 +36,4 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload
 # Stage 4: Production runner (no dev tools, multi-worker)
 FROM base AS production
 USER appuser
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+CMD ["./scripts/entrypoint.sh"]
