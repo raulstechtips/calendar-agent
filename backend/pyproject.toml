@@ -1,6 +1,6 @@
 [project]
 name = "calendar-agent-backend"
-version = "0.1.2"
+version = "0.1.3"
 description = "AI Calendar Assistant — FastAPI backend with LangGraph agents"
 requires-python = ">=3.12"
 dependencies = [
