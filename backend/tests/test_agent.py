@@ -207,6 +207,16 @@ class TestPrompts:
         instructions = get_system_instructions()
         assert "SECRET-42" in instructions
 
+    def test_system_instructions_should_not_label_canary_token(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        fake_settings = type("S", (), {"canary_token": "SECRET-42"})()
+        monkeypatch.setattr("app.agents.prompts.settings", fake_settings)
+        instructions = get_system_instructions()
+        assert "tracking token" not in instructions.lower()
+        assert "internal" not in instructions.lower()
+
     def test_system_instructions_omits_canary_when_empty(
         self,
     ) -> None:

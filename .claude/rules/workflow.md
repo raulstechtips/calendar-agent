@@ -12,13 +12,17 @@ Follow this exact process for every story/task:
 2. **Read the spec**: `.claude/specs/in-progress/SPEC.md` — understand architecture context
 3. **Explore existing code**: search for existing patterns to follow before writing anything new
 4. **Plan thoroughly**: list files to create/modify, patterns to follow, and review the SPEC's Security Constraints section — for each constraint that applies to this story, note how the implementation will satisfy it
-5. **Write failing tests first** (Red phase) — see tdd.md
-6. **Implement minimum code to pass tests** (Green phase)
-7. **Refactor** while tests stay green
-8. **Verify**: run the full verification suite for your area
-9. **Internal code review**: launch the `code-reviewer` agent as a subagent to review all changes on the current branch. Address any CRITICAL findings before proceeding — WARNING and SUGGESTION items are at your discretion but should be considered.
-10. **Commit**: conventional commit referencing the issue number
-11. **Update issue and open PR**:
+5. **Validate plan against rules**: Before writing any code, cross-check the plan against all applicable rules files. A plan — whether created in plan mode, provided by the user, or self-generated — is a *starting point*, not an override. Specifically:
+   - If the plan touches `frontend/**` visual components, verify it includes skill invocations required by `frontend.md` (design skills before first edit, not just at the end)
+   - If the plan prescribes specific UI values (colors, spacing, classes) without those values coming from a design skill invocation, invoke the skill now — the plan captures *what to change*, the skill provides *design intelligence* about *how well* those changes will look
+   - If the plan skips TDD, security checks, or other required steps, add them back — plans are not exempt from rules
+6. **Write failing tests first** (Red phase) — see tdd.md
+7. **Implement minimum code to pass tests** (Green phase)
+8. **Refactor** while tests stay green
+9. **Verify**: run the full verification suite for your area
+10. **Internal code review**: launch the `code-reviewer` agent as a subagent to review all changes on the current branch. Address any CRITICAL findings before proceeding — WARNING and SUGGESTION items are at your discretion but should be considered.
+11. **Commit**: conventional commit referencing the issue number
+12. **Update issue and open PR**:
     ```bash
     gh issue edit <n> --add-label "status:done" --remove-label "status:in-progress"
     ```

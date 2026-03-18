@@ -1,10 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import {
   CalendarCog,
   CalendarPlus,
   CalendarX2,
   Check,
+  Loader2,
   X,
 } from "lucide-react";
 
@@ -45,14 +47,16 @@ export default function ConfirmationCard({
   onReject,
   disabled,
 }: ConfirmationCardProps) {
+  const [isPending, setIsPending] = useState(false);
   const Icon = ACTION_ICONS[action] ?? CalendarPlus;
   const fields = formatConfirmationDetails(action, details);
+  const isDisabled = disabled || isPending;
 
   return (
-    <Card size="sm" className="mx-4 my-2 max-w-md">
+    <Card size="sm" className="mx-5 my-2 max-w-md border-l-[3px] border-l-primary">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Icon className="size-4" />
+          <Icon className="size-5" />
           {getActionLabel(action)}
         </CardTitle>
       </CardHeader>
@@ -75,18 +79,25 @@ export default function ConfirmationCard({
           <>
             <Button
               size="sm"
-              onClick={onApprove}
-              disabled={disabled}
+              onClick={() => {
+                setIsPending(true);
+                onApprove();
+              }}
+              disabled={isDisabled}
               aria-label="Approve"
             >
-              <Check data-icon="inline-start" />
+              {isPending ? (
+                <Loader2 className="animate-spin" data-icon="inline-start" />
+              ) : (
+                <Check data-icon="inline-start" />
+              )}
               Approve
             </Button>
             <Button
               size="sm"
               variant="outline"
               onClick={onReject}
-              disabled={disabled}
+              disabled={isDisabled}
               aria-label="Reject"
             >
               <X data-icon="inline-start" />

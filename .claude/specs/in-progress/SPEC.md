@@ -24,23 +24,31 @@ A conversational AI calendar assistant where users authenticate with Google, cha
 | Package | Version | Install |
 |---------|---------|---------|
 | `uv` | ≥0.10.10 | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
-| `fastapi[standard]` | 0.135.1 | `uv add "fastapi[standard]"` |
-| `langgraph` | 1.1.0 | `uv add langgraph` |
-| `langgraph-prebuilt` | 1.0.8 | `uv add langgraph-prebuilt` |
-| `langchain-core` | 1.2.19 | `uv add langchain-core` |
-| `langchain-openai` | 1.1.10 | `uv add langchain-openai` |
-| `langchain-google-community[calendar]` | 3.0.5 | `uv add "langchain-google-community[calendar]"` |
-| `azure-search-documents` | 11.6.0 | `uv add azure-search-documents` |
-| `azure-ai-contentsafety` | 1.0.0 | `uv add azure-ai-contentsafety` |
-| `redis[hiredis]` | 7.1.1 | `uv add "redis[hiredis]"` |
-| `slowapi` | ≥0.1.9 | `uv add slowapi` |
-| `asgi-correlation-id` | ≥4.3.0 | `uv add asgi-correlation-id` |
-| `cryptography` | latest | `uv add cryptography` |
-| `azure-identity` | latest | `uv add azure-identity` |
+| `fastapi[standard]` | 0.135.1 | `uv add "fastapi[standard]==0.135.1"` |
+| `pydantic` | 2.12.5 | `uv add "pydantic==2.12.5"` |
+| `pydantic-settings` | 2.13.1 | `uv add "pydantic-settings==2.13.1"` |
+| `langgraph` | 1.1.2 | `uv add "langgraph==1.1.2"` |
+| `langgraph-prebuilt` | 1.0.8 | `uv add "langgraph-prebuilt==1.0.8"` |
+| `langchain-core` | 1.2.19 | `uv add "langchain-core==1.2.19"` |
+| `langchain-openai` | 1.1.11 | `uv add "langchain-openai==1.1.11"` |
+| `langchain-google-community[calendar]` | 3.0.5 | `uv add "langchain-google-community[calendar]==3.0.5"` |
+| `azure-search-documents` | 11.6.0 | `uv add "azure-search-documents==11.6.0"` |
+| `azure-ai-contentsafety` | 1.0.0 | `uv add "azure-ai-contentsafety==1.0.0"` |
+| `azure-identity` | 1.25.3 | `uv add "azure-identity==1.25.3"` |
+| `redis[hiredis]` | 7.3.0 | `uv add "redis[hiredis]==7.3.0"` |
+| `slowapi` | 0.1.9 | `uv add "slowapi==0.1.9"` |
+| `asgi-correlation-id` | 4.3.4 | `uv add "asgi-correlation-id==4.3.4"` |
+| `cryptography` | 46.0.5 | `uv add "cryptography==46.0.5"` |
+| `google-auth` | 2.49.1 | `uv add "google-auth==2.49.1"` |
+| `google-api-python-client` | 2.192.0 | `uv add "google-api-python-client==2.192.0"` |
+| `cachecontrol` | 0.14.4 | `uv add "cachecontrol==0.14.4"` |
+| `requests` | 2.32.5 | `uv add "requests==2.32.5"` |
+| `openai` | 2.28.0 | `uv add "openai==2.28.0"` |
+| `httpx` | 0.28.1 | `uv add "httpx==0.28.1"` |
 | Python | 3.12 | `python:3.12-slim` base image |
 
 Dev dependencies (in `[dependency-groups]`):
-- `ruff`, `pytest`, `pytest-asyncio`, `httpx` — install via `uv add --group dev ruff pytest pytest-asyncio httpx`
+- `ruff==0.15.6`, `pytest==9.0.2`, `pytest-asyncio==1.3.0`, `mypy==1.19.1`, `pyright==1.1.408`, `types-requests==2.32.4.20260107`
 
 Dependencies managed in `pyproject.toml` + `uv.lock` (committed to git). No requirements.txt.
 

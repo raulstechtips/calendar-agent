@@ -1,6 +1,7 @@
 "use client";
 
-import { Calendar } from "lucide-react";
+import { useState } from "react";
+import { Calendar, Loader2 } from "lucide-react";
 import { signIn } from "next-auth/react";
 
 import { Button } from "@/components/ui/button";
@@ -13,12 +14,14 @@ import {
 } from "@/components/ui/card";
 
 export default function CalendarScopePrompt() {
+  const [isPending, setIsPending] = useState(false);
+
   return (
-    <div className="flex h-full items-center justify-center p-8">
-      <Card className="max-w-md">
+    <div className="flex h-full items-center justify-center bg-background p-8">
+      <Card className="max-w-lg shadow-lg">
         <CardHeader>
-          <div className="mx-auto mb-2 flex size-12 items-center justify-center rounded-full bg-primary/10">
-            <Calendar className="size-6 text-primary" />
+          <div className="mx-auto mb-3 flex size-14 items-center justify-center rounded-2xl bg-primary shadow-md shadow-primary/25">
+            <Calendar className="size-7 text-primary-foreground" />
           </div>
           <CardTitle className="text-center">Calendar Access Required</CardTitle>
           <CardDescription className="text-center">
@@ -29,7 +32,9 @@ export default function CalendarScopePrompt() {
         </CardHeader>
         <CardContent className="flex justify-center">
           <Button
-            onClick={() =>
+            disabled={isPending}
+            onClick={() => {
+              setIsPending(true);
               void signIn(
                 "google",
                 { redirectTo: "/calendar" },
@@ -37,9 +42,10 @@ export default function CalendarScopePrompt() {
                   scope:
                     "openid email profile https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly",
                 },
-              )
-            }
+              );
+            }}
           >
+            {isPending && <Loader2 className="animate-spin" data-icon="inline-start" />}
             Grant Calendar Access
           </Button>
         </CardContent>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { Loader2 } from "lucide-react";
 import { savePreferences } from "@/actions/settings";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -41,7 +42,7 @@ export function PreferencesForm({ preferences }: PreferencesFormProps) {
           id="timezone"
           name="timezone"
           defaultValue={preferences.timezone}
-          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          className="flex h-9 w-full appearance-none rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors duration-150 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
         >
           {[...new Set([preferences.timezone, ...TIMEZONES])].map((tz) => (
             <option key={tz} value={tz}>
@@ -58,7 +59,7 @@ export function PreferencesForm({ preferences }: PreferencesFormProps) {
           name="default_calendar"
           type="text"
           defaultValue={preferences.default_calendar}
-          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors duration-150 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
         />
       </div>
 
@@ -75,7 +76,7 @@ export function PreferencesForm({ preferences }: PreferencesFormProps) {
       )}
 
       <Button type="submit" disabled={isPending}>
-        {isPending ? "Saving..." : "Save Preferences"}
+        {isPending ? <><Loader2 className="animate-spin" data-icon="inline-start" />Saving...</> : "Save Preferences"}
       </Button>
     </form>
   );
