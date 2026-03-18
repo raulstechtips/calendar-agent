@@ -15,6 +15,7 @@ RUN groupadd --system --gid 1001 appgroup && \
 COPY --from=builder /app/.venv /app/.venv
 COPY app/ ./app/
 COPY scripts/ ./scripts/
+RUN chmod +x ./scripts/entrypoint.sh
 
 ENV PATH="/app/.venv/bin:$PATH"
 EXPOSE 8000
