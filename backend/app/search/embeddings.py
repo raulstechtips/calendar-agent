@@ -119,9 +119,14 @@ def format_event_text(event: dict[str, Any]) -> str:
 
 def build_search_document(
     event: dict[str, Any], content: str, embedding: list[float]
-) -> dict[str, Any]:
+) -> dict[str, Any] | None:
     """Build a search index document from a calendar event and its embedding."""
-    event_id: str = event["id"]
+    event_id = event.get("id")
+    if event_id is None:
+        logger.warning(
+            "Skipping event without id: %s", event.get("summary", "(unknown)")
+        )
+        return None
     start = event.get("start", {})
     timestamp = start.get("dateTime") or start.get("date", "")
 
@@ -224,12 +229,22 @@ async def process_events(user_id: str, events: list[dict[str, Any]]) -> list[str
             client, texts, user_id, batch_num, total_batches
         )
 
-        documents = [
+        documents_or_none = [
             build_search_document(event, text, embedding)
             for event, text, embedding in zip(
                 batch_events, texts, embeddings, strict=True
             )
         ]
+        documents = [d for d in documents_or_none if d is not None]
+
+        if not documents:
+            logger.info(
+                "Batch %d/%d: all events skipped (no valid IDs) for user %s",
+                batch_num,
+                total_batches,
+                user_id,
+            )
+            continue
 
         ids = await upsert_documents(user_id, documents)
         all_ids.extend(ids)
