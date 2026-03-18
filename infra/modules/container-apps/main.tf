@@ -181,11 +181,16 @@ resource "azurerm_container_app" "frontend" {
         value = "true"
       }
 
-      # Server-side proxy reads this at runtime to forward API calls to the
-      # internal backend. Client-side code uses relative URLs via api.ts and
-      # proxy.ts — the browser never contacts the backend directly.
       env {
-        name  = "NEXT_PUBLIC_API_URL"
+        name  = "AUTH_URL"
+        value = "https://${local.frontend_fqdn}"
+      }
+
+      # Server-side proxy reads INTERNAL_API_URL at runtime to forward API
+      # calls to the internal backend. NEXT_PUBLIC_API_URL is baked into the
+      # client bundle at build time and ignored by server code at runtime.
+      env {
+        name  = "INTERNAL_API_URL"
         value = "https://${local.backend_fqdn}"
       }
 

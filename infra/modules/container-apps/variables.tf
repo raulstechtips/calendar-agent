@@ -167,7 +167,7 @@ variable "backend_memory" {
 variable "frontend_min_replicas" {
   description = "Minimum number of frontend container replicas"
   type        = number
-  default     = 0
+  default     = 1
 }
 
 variable "frontend_max_replicas" {
@@ -179,7 +179,7 @@ variable "frontend_max_replicas" {
 variable "backend_min_replicas" {
   description = "Minimum number of backend container replicas"
   type        = number
-  default     = 0
+  default     = 1
 }
 
 variable "backend_max_replicas" {
