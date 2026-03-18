@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { Loader2 } from "lucide-react";
 import { signIn } from "next-auth/react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -51,6 +53,7 @@ interface ScopeManagerProps {
 }
 
 export function ScopeManager({ scopes }: ScopeManagerProps) {
+  const [pendingScope, setPendingScope] = useState<string | null>(null);
   const scopeSet = new Set(scopes);
 
   const ungrantedScopes = REQUESTABLE_SCOPES.filter(
@@ -58,6 +61,7 @@ export function ScopeManager({ scopes }: ScopeManagerProps) {
   );
 
   function handleGrant(scope: string) {
+    setPendingScope(scope);
     const fullScope = `${BASE_SCOPES} ${scope}`;
     signIn("google", { redirectTo: "/settings" }, { scope: fullScope });
   }
@@ -96,8 +100,10 @@ export function ScopeManager({ scopes }: ScopeManagerProps) {
                 key={rs.scope}
                 variant="outline"
                 size="sm"
+                disabled={pendingScope !== null}
                 onClick={() => handleGrant(rs.scope)}
               >
+                {pendingScope === rs.scope && <Loader2 className="animate-spin" data-icon="inline-start" />}
                 {rs.buttonLabel}
               </Button>
             ))}

@@ -23,20 +23,20 @@ export default function EventCard({ event, onClick, style }: EventCardProps) {
       onClick={onClick}
       style={style}
       className={cn(
-        "w-full cursor-pointer rounded-md border px-2 py-1 text-left text-xs transition-colors",
-        "hover:ring-2 hover:ring-ring/50 focus-visible:ring-2 focus-visible:ring-ring",
+        "w-full cursor-pointer rounded-md border-l-[3px] bg-card px-2.5 py-1.5 text-left text-xs shadow-sm transition-all duration-150",
+        "hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring",
         "outline-none overflow-hidden",
         event.isAiCreated
-          ? "border-primary/30 bg-primary/10 text-primary-foreground dark:text-primary"
-          : "border-border bg-muted/60 text-foreground",
+          ? "border-l-primary"
+          : "border-l-border",
       )}
       aria-label={`${event.summary}, ${timeLabel}`}
     >
       <div className="flex items-center gap-1">
-        <span className="truncate font-medium">{event.summary}</span>
+        <span className="truncate font-medium text-foreground">{event.summary}</span>
         {event.isAiCreated && (
-          <Badge variant="secondary" className="h-4 shrink-0 px-1 text-[10px]">
-            <Bot className="size-2.5" data-icon="inline-start" />
+          <Badge variant="secondary" className="h-5 shrink-0 px-1.5 text-[10px]">
+            <Bot className="size-3" data-icon="inline-start" />
             AI
           </Badge>
         )}

@@ -1,5 +1,6 @@
 "use client";
 
+import { MessageSquare } from "lucide-react";
 import { useCallback, useEffect, useRef } from "react";
 
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -13,6 +14,12 @@ import ChatMessage from "./ChatMessage";
 import ConfirmationCard from "./ConfirmationCard";
 import ScopeRequiredCard from "./ScopeRequiredCard";
 
+const SUGGESTIONS = [
+  "What's on my schedule today?",
+  "Find a free slot this week",
+  "Schedule a 30-min focus block",
+] as const;
+
 interface ChatThreadProps {
   messages: ChatMessageType[];
   isStreaming: boolean;
@@ -21,6 +28,7 @@ interface ChatThreadProps {
   onApprove: () => void;
   onReject: () => void;
   onGrantScope: () => void;
+  onSend?: (message: string) => void;
 }
 
 export default function ChatThread({
@@ -31,6 +39,7 @@ export default function ChatThread({
   onApprove,
   onReject,
   onGrantScope,
+  onSend,
 }: ChatThreadProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number>(0);
@@ -54,10 +63,32 @@ export default function ChatThread({
 
   if (messages.length === 0) {
     return (
-      <div className="flex flex-1 items-center justify-center p-8">
-        <p className="text-muted-foreground">
-          Start a conversation with your calendar assistant.
-        </p>
+      <div className="flex flex-1 flex-col items-center justify-center gap-6 p-8">
+        <div className="flex size-16 items-center justify-center rounded-2xl bg-primary/10 shadow-sm">
+          <MessageSquare className="size-7 text-primary" />
+        </div>
+        <div className="text-center">
+          <h2 className="text-xl font-semibold tracking-tight text-foreground">
+            How can I help with your calendar?
+          </h2>
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            Start a conversation with your calendar assistant.
+          </p>
+        </div>
+        {onSend && (
+          <div className="flex flex-wrap justify-center gap-2 pt-2">
+            {SUGGESTIONS.map((suggestion) => (
+              <button
+                key={suggestion}
+                type="button"
+                onClick={() => onSend(suggestion)}
+                className="rounded-lg border border-border/60 bg-card px-4 py-2.5 text-sm text-foreground shadow-sm transition-all hover:border-primary/30 hover:shadow-md"
+              >
+                {suggestion}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     );
   }

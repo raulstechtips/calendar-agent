@@ -1,6 +1,7 @@
 "use client";
 
-import { Calendar } from "lucide-react";
+import { useState } from "react";
+import { Calendar, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -16,11 +17,13 @@ interface ScopeRequiredCardProps {
 }
 
 export default function ScopeRequiredCard({ onGrant }: ScopeRequiredCardProps) {
+  const [isPending, setIsPending] = useState(false);
+
   return (
-    <Card size="sm" className="mx-4 my-2 max-w-md">
+    <Card size="sm" className="mx-5 my-2 max-w-md border-l-[3px] border-l-primary">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Calendar className="size-4" />
+          <Calendar className="size-5" />
           Calendar Access Required
         </CardTitle>
       </CardHeader>
@@ -30,7 +33,15 @@ export default function ScopeRequiredCard({ onGrant }: ScopeRequiredCardProps) {
         </p>
       </CardContent>
       <CardFooter>
-        <Button size="sm" onClick={onGrant}>
+        <Button
+          size="sm"
+          disabled={isPending}
+          onClick={() => {
+            setIsPending(true);
+            onGrant();
+          }}
+        >
+          {isPending && <Loader2 className="animate-spin" data-icon="inline-start" />}
           Grant Calendar Access
         </Button>
       </CardFooter>

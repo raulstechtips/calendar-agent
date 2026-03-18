@@ -47,6 +47,18 @@ export default function CalendarShell() {
     timeMax,
   );
 
+  // Deduplicate events with identical summary + time range (e.g., from
+  // multiple calendar subscriptions returning the same recurring instance)
+  const deduplicatedEvents = useMemo(() => {
+    const seen = new Set<string>();
+    return events.filter((e) => {
+      const key = `${e.summary}|${e.start}|${e.end}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [events]);
+
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(
     null,
   );
@@ -75,7 +87,7 @@ export default function CalendarShell() {
             Failed to load calendar events. Please try again.
           </p>
         </div>
-      ) : events.length === 0 ? (
+      ) : deduplicatedEvents.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8">
           <CalendarOff className="size-10 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">
@@ -83,10 +95,10 @@ export default function CalendarShell() {
           </p>
         </div>
       ) : view === "day" ? (
-        <DayView events={events} date={currentDate} onEventClick={setSelectedEvent} />
+        <DayView events={deduplicatedEvents} date={currentDate} onEventClick={setSelectedEvent} />
       ) : (
         <WeekView
-          events={events}
+          events={deduplicatedEvents}
           weekStart={getWeekRange(currentDate).start}
           onEventClick={setSelectedEvent}
         />
