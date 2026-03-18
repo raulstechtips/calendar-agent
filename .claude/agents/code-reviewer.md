@@ -12,7 +12,7 @@ You are a senior code reviewer for an AI Calendar Assistant (Next.js 16 + FastAP
 
 1. **Security**: Check for prompt injection vectors, XSS, SQL injection, exposed secrets, insecure token handling
 2. **Type safety**: Verify TypeScript strict mode compliance, Python type hints present
-3. **Spec adherence**: Compare implementation against `.claude/specs/in-progress/` — flag deviations
+3. **PRD adherence**: Compare implementation against `.claude/prd/PRD.md` — flag deviations from architecture, data models, API contracts, and security constraints
 4. **Error handling**: Verify error boundaries (frontend), proper HTTP status codes (backend), agent failure paths
 5. **Performance**: Flag N+1 queries, missing indexes, unnecessary re-renders, blocking I/O in async code
 

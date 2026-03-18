@@ -9,9 +9,9 @@ Follow this exact process for every story/task:
 ## Step-by-step
 
 1. **Read the issue**: `gh issue view <number>` — understand acceptance criteria before writing code
-2. **Read the spec**: `.claude/specs/in-progress/SPEC.md` — understand architecture context
+2. **Read the PRD and PI Plan**: Read `.claude/prd/PRD.md` (security constraints, data models, API contracts) and `.claude/pi/PI.md` (dependency context). Read the GitHub issue for detailed AC and file scope.
 3. **Explore existing code**: search for existing patterns to follow before writing anything new
-4. **Plan thoroughly**: list files to create/modify, patterns to follow, and review the SPEC's Security Constraints section — for each constraint that applies to this story, note how the implementation will satisfy it
+4. **Plan thoroughly**: list files to create/modify, patterns to follow, and review the PRD's Security Constraints section — for each constraint that applies to this story, note how the implementation will satisfy it
 5. **Write failing tests first** (Red phase) — see tdd.md
 6. **Implement minimum code to pass tests** (Green phase)
 7. **Refactor** while tests stay green
@@ -30,12 +30,12 @@ Follow this exact process for every story/task:
 - Multiple architecturally different approaches exist
 - Change would affect files OUTSIDE the story's file scope
 - An existing test needs modification
-- A dependency not in the spec needs to be added
+- A dependency not in the PRD needs to be added
 - Credentials or environment config is needed
 
 ## When to decide autonomously
 
-- Implementation approach is clear from spec + existing patterns
+- Implementation approach is clear from PRD + PI Plan + existing patterns
 - Choosing between equivalent minor details
 - Fixing lint/type errors from the current change
 - Adding error handling at boundaries

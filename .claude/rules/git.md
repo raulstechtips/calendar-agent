@@ -40,3 +40,10 @@ Examples:
 
 Format: `<type>/<issue-number>-<short-description>`
 Example: `feat/8-auth-setup`, `fix/42-token-refresh`, `chore/29-project-init`
+
+## PI tags
+
+When a Program Increment (sprint) is closed, tag the commit:
+- Format: `pi-N-complete` (e.g., `pi-1-complete`, `pi-2-complete`)
+- Created by the `/close-pi` skill
+- Local only by default — push with `git push origin pi-N-complete` if desired
