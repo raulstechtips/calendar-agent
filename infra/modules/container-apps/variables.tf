@@ -143,25 +143,25 @@ variable "backend_image" {
 variable "frontend_cpu" {
   description = "CPU cores allocated to the frontend container"
   type        = number
-  default     = 0.25
+  default     = 0.5
 }
 
 variable "frontend_memory" {
   description = "Memory allocated to the frontend container"
   type        = string
-  default     = "0.5Gi"
+  default     = "1Gi"
 }
 
 variable "backend_cpu" {
   description = "CPU cores allocated to the backend container"
   type        = number
-  default     = 0.25
+  default     = 0.5
 }
 
 variable "backend_memory" {
   description = "Memory allocated to the backend container"
   type        = string
-  default     = "0.5Gi"
+  default     = "1Gi"
 }
 
 variable "frontend_min_replicas" {
