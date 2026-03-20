@@ -86,6 +86,7 @@ Load the current PRD, identify what's changing, and scope accordingly (usually L
 name: <project name>
 version: 1.0
 created: <YYYY-MM-DD>
+status: draft
 ---
 
 ## Overview

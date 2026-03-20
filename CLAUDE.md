@@ -97,4 +97,3 @@ When a decision is made (by the user or during implementation):
 - PRD (source of truth): `.claude/sdlc/prd/PRD.md` — tech stack, versions, architecture, API contracts, data models, decisions log
 - PI Plan (current sprint): `.claude/sdlc/pi/PI.md` — epics, features, dependency graph, worktree strategy
 - Human workflow: `docs/HUMAN-WORKFLOW.md` — how to launch agents, review, merge, manage the sprint
-- Design spec: `docs/superpowers/specs/2026-03-17-sdlc-skill-suite-design.md` — SDLC skill suite design

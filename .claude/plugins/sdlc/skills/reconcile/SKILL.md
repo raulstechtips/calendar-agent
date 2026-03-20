@@ -55,13 +55,13 @@ From the combined issue list, parse each issue body to extract structure:
 **Parent extraction** — for each issue, find the `## Parent` section and extract the referenced issue number:
 ```
 ## Parent
-Feature: #42
+- Feature: #42
 ```
 → parent of this issue is `#42`.
 
 **Dependency extraction** — for each issue, find the `## Dependencies` section and extract:
-- Lines matching `Blocked by: #N` or `Blocked by: #N, #M` → this issue's blockers
-- Lines matching `Blocks: #N` or `Blocks: #N, #M` → issues this one blocks
+- Lines matching `- Blocked by: #N` or `- Blocked by: #N, #M` (dash-prefixed) → this issue's blockers
+- Lines matching `- Blocks: #N` or `- Blocks: #N, #M` (dash-prefixed) → issues this one blocks
 
 Build two data structures:
 - `parent_of[N]` → issue number of N's parent (or null)
@@ -102,6 +102,8 @@ For each open issue with a `## Parent` section:
 - Check if that number exists in the fetched issue set (open or recently closed)
 - If the parent does NOT exist → broken hierarchy
 - If the parent's type label is inconsistent (e.g., story's parent is also a story instead of a feature) → broken hierarchy
+
+**Exception:** If a story's `## Parent` section contains `- Feature: none` or `- Feature: none (flat epic)`, this is valid — the story is a direct child of the epic with no feature grouping. Do NOT flag this as a broken hierarchy. Only check that the `- Epic: #N` reference is valid.
 
 Record findings:
 ```

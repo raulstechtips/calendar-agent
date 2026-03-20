@@ -28,19 +28,13 @@ cat <<'BODY' > /tmp/sdlc-epic-body.md
 <draft body content without frontmatter>
 BODY
 
-gh issue create \
+EPIC_URL=$(gh issue create \
   --title "<name>" \
   --body-file /tmp/sdlc-epic-body.md \
   --label "type:epic" \
   --label "priority:<priority>" \
   --label "area:<area1>" \
-  --label "area:<area2>"
-```
-
-Capture the issue number:
-
-```bash
-EPIC_URL=$(gh issue create --title "..." --body-file /tmp/sdlc-epic-body.md --label "type:epic" --label "priority:<priority>" --label "area:<area1>")
+  --label "area:<area2>")
 EPIC_NUM=$(echo "$EPIC_URL" | grep -o '[0-9]*$')
 ```
 
@@ -61,6 +55,9 @@ FEAT_URL=$(gh issue create \
 
 ## Stories
 - (to be defined via /sdlc:define feature)
+
+## Non-goals
+(to be defined)
 
 ## Dependencies
 - Blocked by: none
@@ -87,6 +84,12 @@ STORY_URL=$(gh issue create \
 
 ## Acceptance Criteria
 - (to be defined via /sdlc:define story)
+
+## File Scope
+(to be defined)
+
+## Technical Notes
+(to be defined)
 
 ## Dependencies
 - Blocked by: none

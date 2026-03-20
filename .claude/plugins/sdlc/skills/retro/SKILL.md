@@ -7,7 +7,7 @@ argument-hint: "[pi | epic #N | feature #N]"
 
 I'm using the sdlc:retro skill to run a retrospective on [scope].
 
-This skill is **read-only** — it never modifies issues, labels, files, or any other state. Its sole purpose is retrospective analysis and document generation.
+This skill **does not modify issues, labels, or project artifacts**. It writes a retrospective document only.
 
 ---
 
@@ -51,7 +51,7 @@ gh issue list \
 gh issue list \
   --state closed \
   --label "type:story" \
-  --search "Epic: #N in:body" \
+  --search '"Epic: #N" in:body' \
   --json number \
   --jq 'length'
 
@@ -59,7 +59,7 @@ gh issue list \
 gh issue list \
   --state closed \
   --label "type:story" \
-  --search "Feature: #N in:body" \
+  --search '"Feature: #N" in:body' \
   --json number \
   --jq 'length'
 ```
@@ -87,16 +87,16 @@ gh issue list \
   --label "type:story" \
   --json number,title,closedAt,labels \
   --jq 'sort_by(.closedAt)'
-  [--search "Epic: #N in:body" if epic scope]
-  [--search "Feature: #N in:body" if feature scope]
+  [--search '"Epic: #N" in:body' if epic scope]
+  [--search '"Feature: #N" in:body' if feature scope]
 
 # Open stories still in scope (carried over)
 gh issue list \
   --state open \
   --label "type:story" \
   --json number,title,labels,createdAt \
-  [--search "Epic: #N in:body" if epic scope]
-  [--search "Feature: #N in:body" if feature scope]
+  [--search '"Epic: #N" in:body' if epic scope]
+  [--search '"Feature: #N" in:body' if feature scope]
 ```
 
 Record: `PLANNED_COUNT` (from PI.md or 0 if unavailable), `DELIVERED_COUNT`, `CARRIED_COUNT`, `CARRIED_ISSUES` (list of open story numbers).
@@ -313,7 +313,6 @@ type: retro
 scope: <PI-1 | Epic #N | Feature #N>
 date: <YYYY-MM-DD>
 period: <SINCE>..<UNTIL>
-audit-ref: (placeholder for future sdlc:audit skill — see docs/sdlc-future-ideas.md)
 ---
 
 ## Summary
@@ -364,9 +363,6 @@ audit-ref: (placeholder for future sdlc:audit skill — see docs/sdlc-future-ide
 - [e.g., "Carry-over stories (#N, #N) as priority-critical for next PI"]
 - [e.g., "Search area: scope stories more narrowly — 2 carried over this PI"]
 - [e.g., "Investigate #N — 6.5 days in-progress with no blocked period"]
-
-## Audit Reference
-(Consider running `sdlc:audit` for technical verification of code quality in this period — see docs/sdlc-future-ideas.md for the planned sdlc:audit skill)
 ```
 
 **Populating the template:**
@@ -382,6 +378,17 @@ audit-ref: (placeholder for future sdlc:audit skill — see docs/sdlc-future-ide
 - Scope change frequency
 - Depth distribution (LIGHT / STANDARD / DEEP)
 - Estimation accuracy (requires size labels)
+
+---
+
+### Step 4b: Commit the Retrospective Document
+
+```bash
+git add .claude/sdlc/retros/<filename>
+git commit -m "docs(retro): add <scope> retrospective <date>"
+```
+
+Where `<scope>` is `pi-N`, `epic-N`, or `feature-N` and `<date>` is today's date.
 
 ---
 
@@ -431,6 +438,7 @@ Before finishing, verify ALL steps were completed:
 - [ ] Step 3d: PRs without approval identified
 - [ ] Step 3e: Commit gaps (3+ days) identified
 - [ ] Step 4: Retrospective document written to `.claude/sdlc/retros/<filename>`
+- [ ] Step 4b: Retrospective document committed to git
 - [ ] Step 5: Terminal summary displayed and next-step offer output
 
 If any step was skipped without a documented skip condition, complete it now before finishing.

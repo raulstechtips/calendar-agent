@@ -70,8 +70,15 @@ For `feature` and `story`: if the parent issue number is not in `$ARGUMENTS`, as
 
 **Reshape** if any of:
 - User provided an existing issue number in `$ARGUMENTS`
-- A draft already exists at `.claude/sdlc/drafts/<level>-*.md` with a `## Changes` section
 - User explicitly says "reshape", "rethink", "revise", or "update"
+
+**Draft exists check:** Also scan for existing drafts at `.claude/sdlc/drafts/<level>-*.md`.
+- If a draft exists AND the user provided an issue number that matches the draft filename → this is a reshape, load the draft.
+- If a draft exists but no issue number was provided → ask before assuming:
+
+> "I found a draft `<filename>`. Is this related to what you're defining now, or do you want to start fresh?"
+
+If start fresh, proceed with new artifact flow (ignore the existing draft). If related, proceed with reshape flow.
 
 If reshaping:
 - Load the current state of the artifact (from GitHub issue body or git file)
@@ -298,17 +305,23 @@ Then ask:
 
 ---
 
-## Feature Level: Optional Grouping
+## Dependency Format (canonical)
 
-When defining an **epic**, after determining the stories/features it contains, check the count:
+All dependency references in issue bodies use this exact format:
 
-- If the epic has **fewer than ~8 stories**, ask:
+```
+- Blocked by: #N, #M
+- Blocks: #N, #M
+```
 
-> "This epic has [N] stories. Want to group them into features, or keep them flat under the epic?"
+Rules:
+- Always dash-prefixed (`- Blocked by:` not `Blocked by:`)
+- Issue numbers use `#` prefix: `#48`, not `48`
+- Multiple blockers separated by comma-space: `#48, #52`
+- When no dependencies: `- Blocked by: none` and `- Blocks: none`
+- Never use brackets, quotes, or other formatting around issue numbers
 
-- If the user chooses **flat**: stories become direct children of the epic. No feature issues are created.
-- If the user chooses **features**: group related stories under feature sub-headings in the draft.
-- If the epic has **8+ stories**: recommend features for organization, but let the user decide.
+This is the canonical format that all define, create, update, and reconcile skills expect.
 
 ---
 

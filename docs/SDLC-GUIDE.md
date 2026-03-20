@@ -45,7 +45,7 @@ Then push to GitHub:
 sdlc:create pi
 ```
 
-If a previous PI exists, run `sdlc:retro pi` first to close it.
+If a previous PI exists, run `sdlc:retro pi` for the retrospective, then `sdlc:create pi` archives the old PI and creates the new one.
 
 ### Phase 2: Decompose Into Work Items
 
@@ -78,7 +78,7 @@ Takes a stub story issue and adds the full detail: acceptance criteria, file sco
 sdlc:status api
 ```
 
-Finds the highest-priority unblocked story (optionally filtered by area). Checks all dependencies, fixes any mismatched labels, presents a recommendation. On confirmation, marks it `status:in-progress` and you start coding.
+Presents an ordered list of unblocked stories by priority (optionally filtered by area). Checks all dependencies, traces root blockers, identifies parallelization opportunities. You decide which story to pick up — the `status:in-progress` label transition is your responsibility.
 
 After completing a story, the agent creates a PR. Then run `sdlc:status` again for the next one.
 
@@ -106,18 +106,17 @@ Records the decision in the PRD Decision Log. Decisions are baked into the PRD b
 
 ### Phase 5: Close the Sprint
 
+**Step 1 — Run the retrospective:**
 ```
 sdlc:retro pi
 ```
+Produces an analysis document at `.claude/sdlc/retros/`. Does NOT modify issues, labels, or artifacts.
 
-This skill:
-- Summarizes what shipped vs what's still open (from GitHub Issues)
-- Verifies the PRD Decision Log is complete
-- Bakes decision log entries into the relevant PRD sections
-- Wipes the decision log for the next sprint
-- Bumps the PRD version
-- Archives the PI Plan to `.claude/sdlc/pi/completed/PI-N.md`
-- Creates a git tag `pi-N-complete`
+**Step 2 — Archive and start fresh:**
+```
+sdlc:create pi
+```
+When run with an existing PI, bakes decisions into PRD, wipes decision log, bumps PRD version, archives PI to `.claude/sdlc/pi/completed/PI-N.md`, creates git tag `pi-N-complete`.
 
 Then run `sdlc:define pi` to start the next sprint.
 
@@ -135,7 +134,7 @@ Then run `sdlc:define pi` to start the next sprint.
 | `sdlc:define pi` | Draft a new Program Increment plan |
 | `sdlc:create pi` | Push PI draft to GitHub |
 | `sdlc:update pi` | Update PI Plan when scope changes mid-sprint |
-| `sdlc:retro pi` | Archive current PI, bake decisions, tag |
+| `sdlc:retro pi` | Process retrospective with metrics |
 | `sdlc:define epic` | Draft epic details |
 | `sdlc:create epic` | Create epic + stub feature issues on GitHub |
 | `sdlc:define feature` | Draft feature details |
@@ -154,7 +153,8 @@ Then run `sdlc:define pi` to start the next sprint.
 | Type | `type:epic`, `type:feature`, `type:story`, `type:spike`, `type:bug`, `type:chore` |
 | Status | `status:todo`, `status:in-progress`, `status:done`, `status:blocked` |
 | Priority | `priority:critical`, `priority:high`, `priority:medium`, `priority:low` |
-| Area | `area:auth`, `area:api`, `area:agents`, `area:ui`, `area:infra`, `area:search` |
+| Area | `area:auth`, `area:api`, `area:agent`, `area:ui`, `area:infra`, `area:search` |
+| Triage | `triage` |
 
 ### Dependency Rules
 
@@ -208,6 +208,54 @@ alias cc='claude --plugin-dir .claude/plugins/sdlc'
 
 ---
 
+## Getting Started (First-Time Setup)
+
+Before using SDLC skills on a new project, create the required GitHub labels:
+
+```bash
+# Type labels
+gh label create "type:epic"    --color "#7057ff" --force
+gh label create "type:feature" --color "#0075ca" --force
+gh label create "type:story"   --color "#cfd3d7" --force
+gh label create "type:spike"   --color "#e4e669" --force
+gh label create "type:bug"     --color "#d73a4a" --force
+gh label create "type:chore"   --color "#fef2c0" --force
+
+# Status labels
+gh label create "status:todo"        --color "#ededed" --force
+gh label create "status:in-progress" --color "#0075ca" --force
+gh label create "status:done"        --color "#0e8a16" --force
+gh label create "status:blocked"     --color "#e11d48" --force
+
+# Priority labels
+gh label create "priority:critical" --color "#b60205" --force
+gh label create "priority:high"     --color "#d93f0b" --force
+gh label create "priority:medium"   --color "#fbca04" --force
+gh label create "priority:low"      --color "#0e8a16" --force
+
+# Triage label
+gh label create "triage" --color "#bfd4f2" --force
+```
+
+Area labels are project-specific. Use `sdlc:init` to create them for your project.
+
+---
+
+## Skill Arguments
+
+Skills accept arguments via the `$ARGUMENTS` placeholder. This lets you pass context directly in the slash command:
+
+```
+sdlc:define story #130
+sdlc:status api
+sdlc:update prd "Switch from Postgres to Redis for sessions"
+sdlc:capture "users need dark mode"
+```
+
+The text after the skill name is passed as `$ARGUMENTS` and used by the skill to determine the target artifact, issue number, or free-form instruction.
+
+---
+
 ## Common Workflows
 
 ### Starting a brand new project
@@ -227,7 +275,8 @@ sdlc:status              → start coding
 
 ### Starting a new sprint on an existing project
 ```
-sdlc:retro pi            → closes PI-1, archives it
+sdlc:retro pi            → produces retrospective analysis
+sdlc:create pi           → archives PI-1, then prompts for PI-2 scope
 sdlc:define pi "Phase 2" → drafts PI-2
 sdlc:create pi           → pushes PI-2 to GitHub
 sdlc:define epic "Session Persistence"

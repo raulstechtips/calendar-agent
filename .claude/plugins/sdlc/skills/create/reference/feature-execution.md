@@ -51,6 +51,12 @@ STORY_URL=$(gh issue create \
 ## Acceptance Criteria
 - (to be defined via /sdlc:define story)
 
+## File Scope
+(to be defined)
+
+## Technical Notes
+(to be defined)
+
 ## Dependencies
 - Blocked by: none
 - Blocks: none

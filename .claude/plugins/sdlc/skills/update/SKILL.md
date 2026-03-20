@@ -166,6 +166,8 @@ Follow the reference exactly. Each change is a separate command — do not batch
 
 If a dependency field changed (`Blocked by` or `Blocks`), the reference file contains bidirectional linking instructions. Follow them — update BOTH the current artifact AND the referenced artifact.
 
+**Note:** Dependency changes under direct update are limited to correcting an existing reference (e.g., fixing a wrong issue number). Adding a NEW dependency relationship (a new `Blocked by` or `Blocks` entry that wasn't there before) always escalates to define per Step 3.
+
 **5. Handle status label updates:**
 
 If a dependency change affects whether the artifact is blocked, recalculate the status label per the reference file. A blocker is **satisfied** if the blocking issue has `status:done` label OR state is `CLOSED`. A blocker is **unmet** if the issue is `OPEN` without `status:done`.

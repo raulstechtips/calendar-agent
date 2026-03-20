@@ -41,7 +41,6 @@ Common sections in an epic body:
 - `## Features` or `## Stories` — child checklist
 - `## Non-goals` — bullet list
 - `## Dependencies` — `Blocked by:` and `Blocks:` lines
-- `## Parent` — PI reference
 
 ### Step 3: Write back the full updated body
 

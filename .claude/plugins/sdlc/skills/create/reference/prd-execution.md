@@ -54,7 +54,7 @@ When the draft has a `## Changes` section (produced by `sdlc:define` reshape), t
 Read .claude/sdlc/prd/PRD.md
 ```
 
-2. **Apply changes from the draft.** The draft contains the complete updated content — write it to `.claude/sdlc/prd/PRD.md`.
+2. **Apply changes surgically.** Read the `## Changes` table from the draft. For each row in the table, use the Edit tool to modify ONLY the targeted section in `.claude/sdlc/prd/PRD.md`. Do NOT replace the entire file with the draft content — the draft only contains changed sections, not the complete PRD.
 
 3. **Bump version in frontmatter:** Increment the minor version (e.g., `1.0` -> `1.1`).
 
