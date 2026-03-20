@@ -2,14 +2,17 @@
 
 ## Overview
 
-A 6-skill suite for managing the full software development lifecycle via Claude Code. Replaces the v1 suite (13 skills) with a cleaner architecture that separates brainstorming from execution, uses mandatory gates with variable depth, and follows the progressive disclosure pattern for skill files.
+A Claude Code plugin providing 7 skills for managing the full software development lifecycle. Replaces the v1 suite (13 local skills) with a cleaner architecture that separates brainstorming from execution, uses mandatory gates with variable depth, and follows the progressive disclosure pattern for skill files.
 
-**Namespace:** `sdlc:`
+**Namespace:** `sdlc:` (provided by the plugin system — plugin named `sdlc`, skills named `define`, `create`, etc.)
+
+**Distribution:** Local plugin at `.claude/plugins/sdlc/`, loaded via `claude --plugin-dir .claude/plugins/sdlc` or shell alias. Can be published to marketplace later.
 
 **Core principle:** Define the work collaboratively (brainstorm → local draft), then execute deliberately (push to GitHub/git). Never skip the thinking phase, never surprise the user with mutations.
 
 ## Architecture Decisions
 
+- **Built as a Claude Code plugin** — gives us `sdlc:` namespace, agents, hooks, and eventual marketplace publication. See `gh-cli-research/05-plugin-architecture.md` for full plugin architecture reference.
 - **Skills are self-contained** — no shared conventions file. Patterns are repeated in each skill for clarity (follows superpowers plugin architecture).
 - **SKILL.md stays under 500 lines** — level-specific content lives in `reference/` subdirectories, loaded on-demand (progressive disclosure).
 - **Scope assessment uses objective criteria** — concrete signals (file count, dep count, area count), never "use your judgment."
@@ -18,17 +21,64 @@ A 6-skill suite for managing the full software development lifecycle via Claude 
 - **Drafts are local files** until `sdlc:create` pushes them to their final destination.
 - **`sdlc:update` handles surgical GitHub edits** — it has the toolset for precise `gh issue edit` operations.
 - **`sdlc:reconcile` only touches labels and open/closed state** — never edits issue bodies.
+- **Labels are the source of truth** for all workflow state. GitHub Projects is not used — labels provide simpler querying, atomic updates for multi-agent safety, and Timeline API compatibility. Projects can be added later as an optional visual layer.
 - **GitHub CLI research documents** in `gh-cli-research/` are the command reference for implementation.
+
+## Plugin Structure
+
+```
+.claude/plugins/sdlc/
+├── plugin.json                     # Plugin manifest (name, description, version)
+├── skills/
+│   ├── define/
+│   │   ├── SKILL.md                # Core 5-phase brainstorming flow
+│   │   └── reference/
+│   │       ├── prd-guide.md
+│   │       ├── pi-guide.md
+│   │       ├── epic-guide.md
+│   │       ├── feature-guide.md
+│   │       └── story-guide.md
+│   ├── create/
+│   │   ├── SKILL.md                # Core execution flow
+│   │   └── reference/
+│   │       ├── prd-execution.md
+│   │       ├── pi-execution.md
+│   │       ├── epic-execution.md
+│   │       ├── feature-execution.md
+│   │       └── story-execution.md
+│   ├── update/
+│   │   ├── SKILL.md                # Smart assessment + routing
+│   │   └── reference/
+│   │       ├── prd-update.md
+│   │       ├── pi-update.md
+│   │       ├── epic-update.md
+│   │       ├── feature-update.md
+│   │       └── story-update.md
+│   ├── status/
+│   │   └── SKILL.md                # Situational awareness
+│   ├── reconcile/
+│   │   └── SKILL.md                # Label hygiene
+│   ├── retro/
+│   │   └── SKILL.md                # Process retrospective
+│   └── capture/
+│       └── SKILL.md                # Quick capture
+└── agents/
+    └── (research agents for sdlc:define and sdlc:retro, defined during implementation)
+```
+
+**Invocation:** `/sdlc:define epic`, `/sdlc:create`, `/sdlc:status auth`, etc.
+
+**Loading:** `claude --plugin-dir .claude/plugins/sdlc` (or add alias: `alias cc='claude --plugin-dir .claude/plugins/sdlc'`)
 
 ## Artifacts
 
 | Artifact | Location | Managed By |
 |----------|----------|------------|
-| PRD | `.claude/prd/PRD.md` | `sdlc:define prd` → `sdlc:create prd` |
-| PI Plan | `.claude/pi/PI.md` | `sdlc:define pi` → `sdlc:create pi` |
-| Archived PIs | `.claude/pi/completed/PI-N.md` | `sdlc:create pi` (archives old PI when creating new) |
-| Drafts | `.claude/drafts/<level>-<name>.md` | `sdlc:define` (creates) → `sdlc:create` (consumes + cleans up) |
-| Retro documents | `.claude/retros/<scope>-<date>.md` | `sdlc:retro` (creates) |
+| PRD | `.claude/sdlc/prd/PRD.md` | `sdlc:define prd` → `sdlc:create prd` |
+| PI Plan | `.claude/sdlc/pi/PI.md` | `sdlc:define pi` → `sdlc:create pi` |
+| Archived PIs | `.claude/sdlc/pi/completed/PI-N.md` | `sdlc:create pi` (archives old PI when creating new) |
+| Drafts | `.claude/sdlc/drafts/<level>-<name>.md` | `sdlc:define` (creates) → `sdlc:create` (consumes + cleans up) |
+| Retro documents | `.claude/sdlc/retros/<scope>-<date>.md` | `sdlc:retro` (creates) |
 | Epics | GitHub Issues (`type:epic`) | `sdlc:create epic` / `sdlc:update` |
 | Features | GitHub Issues (`type:feature`) | `sdlc:create feature` / `sdlc:update` |
 | Stories | GitHub Issues (`type:story`) | `sdlc:create story` / `sdlc:update` |
@@ -49,7 +99,7 @@ Status labels are mutually exclusive. Type, priority, and area labels are set at
 
 ### Three Levels
 
-1. **PI Plan** (plain language in `.claude/pi/PI.md`) — high-level blocking relationships between epics/features. Informs worktree strategy and phasing.
+1. **PI Plan** (plain language in `.claude/sdlc/pi/PI.md`) — high-level blocking relationships between epics/features. Informs worktree strategy and phasing.
 2. **GitHub Issue body** (structured sections) — exact blocking relationships per issue:
    ```markdown
    ## Dependencies
@@ -89,17 +139,7 @@ When adding a new blocker, walk the `Blocked by` chain via DFS. If the walk reac
 
 **Allowed tools:** Read, Edit, Write, Bash, Grep, Glob, Agent
 
-**File structure:**
-```
-.claude/skills/sdlc-define/
-├── SKILL.md                    # Core 5-phase flow
-└── reference/
-    ├── prd-guide.md            # PRD-specific questions, templates, criteria
-    ├── pi-guide.md             # PI planning guidance
-    ├── epic-guide.md           # Epic definition guidance
-    ├── feature-guide.md        # Feature definition guidance
-    └── story-guide.md          # Story definition guidance
-```
+**Plugin path:** `skills/define/SKILL.md` + `skills/define/reference/*.md` (see Plugin Structure above)
 
 #### Phases
 
@@ -178,7 +218,7 @@ After Phase 2 completes, re-evaluate the depth assessment using the same objecti
 - DEEP: "Three approaches with trade-offs. Here's my analysis..."
 
 **Phase 4: Draft (mandatory)**
-- Produce a draft file at `.claude/drafts/<level>-<name-or-number>.md`
+- Produce a draft file at `.claude/sdlc/drafts/<level>-<name-or-number>.md`
 - If reshaping an existing artifact: draft starts as a copy of current state, with a `## Changes` section documenting what was modified
 - Format defined by the reference guide (level-specific template). Each guide specifies the exact body sections for that level (e.g., epic: Overview, Success Criteria, Features, Non-goals, Dependencies; story: Description, Acceptance Criteria, File Scope, Technical Notes, Dependencies). These templates will be defined in the implementation plan.
 - Draft includes all fields `sdlc:create` or `sdlc:update` will need
@@ -207,7 +247,7 @@ parent-feature: <number or name, if applicable>
 
 - Greenfield: guided interview — overview, tech stack, architecture, data models, API contracts, security constraints, roadmap, acceptance criteria, out of scope
 - Brownfield: scan codebase first (package.json, pyproject.toml, directory structure), propose PRD structure based on what exists, ask targeted questions to fill gaps
-- Detection: check if `.claude/prd/PRD.md` exists and if codebase has existing code
+- Detection: check if `.claude/sdlc/prd/PRD.md` exists and if codebase has existing code
 
 #### Feature Level is Optional
 
@@ -225,23 +265,13 @@ Epics can contain stories directly when the epic is small (fewer than ~8 stories
 
 **Allowed tools:** Read, Bash, Grep, Glob
 
-**File structure:**
-```
-.claude/skills/sdlc-create/
-├── SKILL.md                    # Core execution flow
-└── reference/
-    ├── prd-execution.md        # Commit PRD to git
-    ├── pi-execution.md         # Commit PI to git
-    ├── epic-execution.md       # Create epic + stub features/stories
-    ├── feature-execution.md    # Create feature + stub stories
-    └── story-execution.md      # Create story issue
-```
+**Plugin path:** `skills/create/SKILL.md` + `skills/create/reference/*.md` (see Plugin Structure above)
 
 #### Steps
 
 **Step 1: Locate Draft**
 - Parse argument for level
-- If none: scan `.claude/drafts/` and show available drafts
+- If none: scan `.claude/sdlc/drafts/` and show available drafts
 - If multiple drafts of the same level exist: list them and ask which one (e.g., "I see `epic-auth.md` and `epic-search.md`. Which one?")
 - If no drafts exist: "No drafts found. Run `/sdlc:define <level>` first."
 - Load `reference/<level>-execution.md`
@@ -272,8 +302,8 @@ For ESCALATE: stop and redirect to `sdlc:define`.
 **Step 3: Execute (level-specific)**
 
 For file-based artifacts (PRD, PI):
-- Write draft content to final location (`.claude/prd/PRD.md` or `.claude/pi/PI.md`)
-- If creating a new PI and an active PI exists: archive old PI to `.claude/pi/completed/PI-N.md`, bake decision log into PRD, bump PRD version, git tag `pi-N-complete`
+- Write draft content to final location (`.claude/sdlc/prd/PRD.md` or `.claude/sdlc/pi/PI.md`)
+- If creating a new PI and an active PI exists: archive old PI to `.claude/sdlc/pi/completed/PI-N.md`, bake decision log into PRD, bump PRD version, git tag `pi-N-complete`
 - Git commit with conventional commit message
 
 For GitHub-based artifacts (epic, feature, story):
@@ -281,7 +311,7 @@ For GitHub-based artifacts (epic, feature, story):
 - Create stub child issues (epic → features or stories, feature → stories)
 - Maintain bidirectional dependency links: if the new issue has `Blocked by: #48`, update #48 to add `Blocks: #<new>` in its body
 - Update parent issue's checklist with real issue numbers
-- Update `.claude/pi/PI.md` with real issue numbers (replacing `#TBD`)
+- Update `.claude/sdlc/pi/PI.md` with real issue numbers (replacing `#TBD`)
 - Apply status labels based on dependency state
 - Git commit for PI.md changes
 
@@ -289,7 +319,7 @@ See `gh-cli-research/02-issue-management.md` for exact `gh` commands.
 
 **Step 4: Report & Cleanup**
 - Show what was created: issue numbers, links, labels applied
-- Ask: "Delete `.claude/drafts/<file>`?" (default yes). If the user declines, the draft persists and will be flagged as a stale draft by `sdlc:status` after 7 days.
+- Ask: "Delete `.claude/sdlc/drafts/<file>`?" (default yes). If the user declines, the draft persists and will be flagged as a stale draft by `sdlc:status` after 7 days.
 
 #### Key Property
 
@@ -307,24 +337,14 @@ This skill never asks creative questions. If the draft is incomplete, it points 
 
 **Allowed tools:** Read, Edit, Write, Bash, Grep, Glob
 
-**File structure:**
-```
-.claude/skills/sdlc-update/
-├── SKILL.md                    # Smart assessment + routing
-└── reference/
-    ├── prd-update.md
-    ├── pi-update.md
-    ├── epic-update.md
-    ├── feature-update.md
-    └── story-update.md
-```
+**Plugin path:** `skills/update/SKILL.md` + `skills/update/reference/*.md` (see Plugin Structure above)
 
 #### Steps
 
 **Step 1: Load Current State**
 - Parse argument for level + identifier
 - If not provided, ask: "What are we updating?"
-- Check `.claude/drafts/` for a reshape draft for this artifact (produced by `sdlc:define` escalation). If found, load it — the `## Changes` section is the change specification. Skip Step 2.
+- Check `.claude/sdlc/drafts/` for a reshape draft for this artifact (produced by `sdlc:define` escalation). If found, load it — the `## Changes` section is the change specification. Skip Step 2.
 - If no draft: fetch current state:
   - PRD/PI → read file from git
   - Epic/feature/story → `gh issue view --json` (see `gh-cli-research/02-issue-management.md`)
@@ -391,11 +411,7 @@ See `gh-cli-research/02-issue-management.md` for exact edit commands and the rea
 
 **Allowed tools:** Read, Bash, Grep, Glob
 
-**File structure:**
-```
-.claude/skills/sdlc-status/
-└── SKILL.md
-```
+**Plugin path:** `skills/status/SKILL.md` (see Plugin Structure above)
 
 #### Steps
 
@@ -408,8 +424,8 @@ See `gh-cli-research/02-issue-management.md` for exact edit commands and the rea
 - Fetch open issues grouped by status label via `gh issue list`
 - Fetch recently closed issues (last 7 days)
 - Read dependency chains from issue bodies
-- Read `.claude/pi/PI.md` for planned structure
-- Scan `.claude/drafts/` for stale drafts (older than 7 days)
+- Read `.claude/sdlc/pi/PI.md` for planned structure
+- Scan `.claude/sdlc/drafts/` for stale drafts (older than 7 days)
 
 See `gh-cli-research/02-issue-management.md` for query commands and jq filters.
 
@@ -420,7 +436,7 @@ See `gh-cli-research/02-issue-management.md` for query commands and jq filters.
 - **Ready:** unblocked `status:todo` stories, ranked by priority
 - **Parallelization:** which ready stories have no dependency relationship and can run simultaneously in separate worktrees
 - **Stale detection:** anything `in-progress` for an unusually long time
-- **Stale drafts:** drafts in `.claude/drafts/` older than 7 days
+- **Stale drafts:** drafts in `.claude/sdlc/drafts/` older than 7 days
 
 **Step 4: Present Briefing**
 
@@ -468,11 +484,7 @@ See `gh-cli-research/02-issue-management.md` for query commands and jq filters.
 
 **Allowed tools:** Read, Bash, Grep, Glob
 
-**File structure:**
-```
-.claude/skills/sdlc-reconcile/
-└── SKILL.md
-```
+**Plugin path:** `skills/reconcile/SKILL.md` (see Plugin Structure above)
 
 #### Steps
 
@@ -540,11 +552,7 @@ Apply WARNING fixes? [y/n]
 
 **Allowed tools:** Read, Bash, Grep, Glob, Agent
 
-**File structure:**
-```
-.claude/skills/sdlc-retro/
-└── SKILL.md
-```
+**Plugin path:** `skills/retro/SKILL.md` (see Plugin Structure above)
 
 #### Steps
 
@@ -586,7 +594,7 @@ Based on observable data:
 
 **Step 4: Produce Retrospective Document**
 
-Saved to `.claude/retros/<scope>-<date>.md`:
+Saved to `.claude/sdlc/retros/<scope>-<date>.md`:
 
 ```markdown
 ---
@@ -632,7 +640,7 @@ PI-1 planned 28 stories across 5 epics. 23 shipped, 5 carried over.
 
 **Step 5: Present and Offer Next Steps**
 - Show summary in terminal
-- "Retrospective saved to `.claude/retros/<file>`. Ready to plan next increment? Run `/sdlc:define pi`."
+- "Retrospective saved to `.claude/sdlc/retros/<file>`. Ready to plan next increment? Run `/sdlc:define pi`."
 
 ---
 
@@ -646,11 +654,7 @@ PI-1 planned 28 stories across 5 epics. 23 shipped, 5 carried over.
 
 **Allowed tools:** Bash
 
-**File structure:**
-```
-.claude/skills/sdlc-capture/
-└── SKILL.md
-```
+**Plugin path:** `skills/capture/SKILL.md` (see Plugin Structure above)
 
 **Behavior:**
 - No context loading — this is a fire-and-forget skill. It does not read PI.md, PRD, or any upstream artifacts.
