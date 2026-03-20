@@ -1,6 +1,6 @@
-# SDLC Skill Suite Guide
+# SDLC Plugin Guide
 
-How to use the project management skills to plan, decompose, execute, and close sprints.
+How to use the v2 SDLC plugin to plan, decompose, execute, and close sprints.
 
 ---
 
@@ -8,8 +8,8 @@ How to use the project management skills to plan, decompose, execute, and close 
 
 | Concept | What it is | Where it lives |
 |---------|-----------|----------------|
-| **PRD** | Product Requirements Document — the stable "what and why" (architecture, data models, API contracts, security constraints, decisions) | `.claude/prd/PRD.md` |
-| **PI Plan** | Program Increment Plan — the "what and when" for the current sprint (epics, features, dependency graph, worktree strategy) | `.claude/pi/PI.md` |
+| **PRD** | Product Requirements Document — the stable "what and why" (architecture, data models, API contracts, security constraints, decisions) | `.claude/sdlc/prd/PRD.md` |
+| **PI Plan** | Program Increment Plan — the "what and when" for the current sprint (epics, features, dependency graph, worktree strategy) | `.claude/sdlc/pi/PI.md` |
 | **Epic** | A large initiative spanning multiple features | GitHub Issue with `type:epic` label |
 | **Feature** | A deliverable capability under an epic | GitHub Issue with `type:feature` label |
 | **Story** | The smallest implementable unit of work | GitHub Issue with `type:story` label |
@@ -21,16 +21,16 @@ How to use the project management skills to plan, decompose, execute, and close 
 ## The Full Lifecycle
 
 ```
-/plan-increment  ──►  /create-epic  ──►  /create-feature  ──►  /detail-story
-       │                                                              │
-       │                                                              ▼
-  /close-pi  ◄──────────────────────────────────  /pick-task  →  work  →  /sync-issues
+sdlc:define pi  ──►  sdlc:define epic  ──►  sdlc:define feature  ──►  sdlc:define story
+       │                                                                       │
+       │                                                                       ▼
+  sdlc:retro pi  ◄──────────────────────────────────  sdlc:status  →  work  →  sdlc:reconcile
 ```
 
 ### Phase 1: Plan the Sprint
 
 ```
-/plan-increment "Enhancement & Polish"
+sdlc:define pi
 ```
 
 This skill:
@@ -38,9 +38,14 @@ This skill:
 - Asks you which workstreams go into this sprint
 - Decomposes each workstream into epics with features (titles only)
 - Builds a dependency graph and proposes a worktree strategy
-- Writes `.claude/pi/PI.md` with `#TBD` placeholders
+- Writes a local draft at `.claude/sdlc/drafts/pi.md` with `#TBD` placeholders
 
-If a previous PI exists, it closes it first (runs `/close-pi` automatically).
+Then push to GitHub:
+```
+sdlc:create pi
+```
+
+If a previous PI exists, run `sdlc:retro pi` first to close it.
 
 ### Phase 2: Decompose Into Work Items
 
@@ -48,58 +53,61 @@ Work top-down: epic → feature → story. Each level creates stub issues for th
 
 **Step 1 — Detail each epic:**
 ```
-/create-epic "UI Overhaul"
+sdlc:define epic "UI Overhaul"
+sdlc:create epic
 ```
 Creates a detailed GitHub Issue for the epic + stub feature issues (title + parent link only). Updates PI.md with real issue numbers.
 
 **Step 2 — Detail each feature:**
 ```
-/create-feature #125
+sdlc:define feature #125
+sdlc:create feature
 ```
 Takes a stub feature issue, fleshes it out with a full description and story breakdown. Creates stub story issues (title + parent links only).
 
 **Step 3 — Detail each story:**
 ```
-/detail-story #130
+sdlc:define story #130
+sdlc:create story
 ```
 Takes a stub story issue and adds the full detail: acceptance criteria, file scope, technical notes, verified dependencies.
 
 ### Phase 3: Execute
 
 ```
-/pick-task api
+sdlc:status api
 ```
 
 Finds the highest-priority unblocked story (optionally filtered by area). Checks all dependencies, fixes any mismatched labels, presents a recommendation. On confirmation, marks it `status:in-progress` and you start coding.
 
-After completing a story, the agent creates a PR. Then run `/pick-task` again for the next one.
+After completing a story, the agent creates a PR. Then run `sdlc:status` again for the next one.
 
 ### Phase 4: Monitor & Adjust
 
 **Check project health:**
 ```
-/sync-issues
+sdlc:reconcile
 ```
 Audits the full issue hierarchy — fixes stale labels, validates dependencies, detects orphaned references and circular deps, reports status.
 
 **When scope changes mid-sprint:**
 ```
-/update-pi "split UI Overhaul into two epics"
-/update-epic #123
-/update-feature #125
-/update-story #130
+sdlc:update pi "split UI Overhaul into two epics"
+sdlc:update epic #123
+sdlc:update feature #125
+sdlc:update story #130
 ```
 
 **When a design decision is made:**
 ```
-/update-prd "Use Redis for session persistence instead of Postgres"
+sdlc:update prd "Use Redis for session persistence instead of Postgres"
 ```
 Records the decision in the PRD Decision Log. Decisions are baked into the PRD body when the PI closes.
 
 ### Phase 5: Close the Sprint
 
 ```
-/close-pi
+sdlc:retro pi
 ```
 
 This skill:
@@ -108,10 +116,10 @@ This skill:
 - Bakes decision log entries into the relevant PRD sections
 - Wipes the decision log for the next sprint
 - Bumps the PRD version
-- Archives the PI Plan to `.claude/pi/completed/PI-N.md`
+- Archives the PI Plan to `.claude/sdlc/pi/completed/PI-N.md`
 - Creates a git tag `pi-N-complete`
 
-Then run `/plan-increment` to start the next sprint.
+Then run `sdlc:define pi` to start the next sprint.
 
 ---
 
@@ -121,19 +129,23 @@ Then run `/plan-increment` to start the next sprint.
 
 | Skill | Purpose |
 |-------|---------|
-| `/create-prd` | Bootstrap a new PRD (new repos only) |
-| `/update-prd` | Record a decision or update a PRD section |
-| `/plan-increment` | Close previous PI + plan the next sprint |
-| `/update-pi` | Update PI Plan when scope changes mid-sprint |
-| `/close-pi` | Archive current PI, bake decisions, tag |
-| `/create-epic` | Detail epic + create stub feature issues |
-| `/create-feature` | Detail feature + create stub story issues |
-| `/detail-story` | Add full AC, file scope, deps to a story |
-| `/update-epic` | Modify epic scope, add/remove features |
-| `/update-feature` | Modify feature, add/remove stories |
-| `/update-story` | Modify story AC, deps, file scope |
-| `/pick-task` | Find next unblocked story |
-| `/sync-issues` | Audit hierarchy, fix labels, validate deps |
+| `sdlc:define prd` | Guided interview to draft a new PRD |
+| `sdlc:create prd` | Push PRD draft to git |
+| `sdlc:update prd` | Record a decision or update a PRD section |
+| `sdlc:define pi` | Draft a new Program Increment plan |
+| `sdlc:create pi` | Push PI draft to GitHub |
+| `sdlc:update pi` | Update PI Plan when scope changes mid-sprint |
+| `sdlc:retro pi` | Archive current PI, bake decisions, tag |
+| `sdlc:define epic` | Draft epic details |
+| `sdlc:create epic` | Create epic + stub feature issues on GitHub |
+| `sdlc:define feature` | Draft feature details |
+| `sdlc:create feature` | Create feature + stub story issues on GitHub |
+| `sdlc:define story` | Draft story with full AC and file scope |
+| `sdlc:create story` | Create story issue on GitHub |
+| `sdlc:update` | Surgical edits to any existing artifact or issue |
+| `sdlc:status` | Find next unblocked story; project health briefing |
+| `sdlc:reconcile` | Audit hierarchy, fix labels, validate deps |
+| `sdlc:capture` | Quick-capture idea as triage issue |
 
 ### Label Taxonomy
 
@@ -148,7 +160,7 @@ Then run `/plan-increment` to start the next sprint.
 
 A dependency is **satisfied** if: the issue has `status:done` label OR is `CLOSED`.
 
-Stories with unmet blockers get `status:blocked` automatically. `/pick-task` and `/sync-issues` both enforce this.
+Stories with unmet blockers get `status:blocked` automatically. `sdlc:status` and `sdlc:reconcile` both enforce this.
 
 ### GitHub Issue Templates
 
@@ -164,26 +176,34 @@ Stories with unmet blockers get `status:blocked` automatically. `/pick-task` and
 
 ```
 .claude/
-├── prd/
-│   └── PRD.md                 ← product requirements (git-versioned)
-├── pi/
-│   ├── PI.md                  ← current sprint plan
-│   └── completed/
-│       └── PI-1.md            ← archived sprints
-└── skills/
-    ├── create-prd/            ← PRD management
-    ├── update-prd/
-    ├── plan-increment/        ← PI lifecycle
-    ├── update-pi/
-    ├── close-pi/
-    ├── create-epic/           ← work decomposition
-    ├── create-feature/
-    ├── detail-story/
-    ├── update-epic/           ← work updates
-    ├── update-feature/
-    ├── update-story/
-    ├── pick-task/             ← execution
-    └── sync-issues/
+├── sdlc/
+│   ├── prd/
+│   │   ├── PRD.md                 ← product requirements (git-versioned)
+│   │   └── completed/
+│   ├── pi/
+│   │   ├── PI.md                  ← current sprint plan
+│   │   └── completed/
+│   │       └── PI-1.md            ← archived sprints
+│   ├── drafts/                    ← local working drafts (gitignored)
+│   └── retros/                    ← retrospective notes
+└── plugins/
+    └── sdlc/                      ← SDLC plugin (commands, skills, hooks)
+```
+
+---
+
+## Plugin Loading
+
+Load the SDLC plugin when starting a session:
+
+```bash
+claude --plugin-dir .claude/plugins/sdlc
+```
+
+Or set an alias for convenience:
+
+```bash
+alias cc='claude --plugin-dir .claude/plugins/sdlc'
 ```
 
 ---
@@ -192,34 +212,45 @@ Stories with unmet blockers get `status:blocked` automatically. `/pick-task` and
 
 ### Starting a brand new project
 ```
-/create-prd                    → guided interview, creates PRD.md
-/plan-increment "MVP"          → creates PI-1 from PRD Roadmap
-/create-epic "Auth"            → creates epic + stub features
-/create-feature #10            → details feature + stub stories
-/detail-story #15              → adds full AC, file scope, deps
-/pick-task                     → start coding
+sdlc:define prd          → guided interview, creates PRD draft
+sdlc:create prd          → commits PRD.md to git
+sdlc:define pi "MVP"     → creates PI-1 draft from PRD Roadmap
+sdlc:create pi           → pushes PI-1 to GitHub
+sdlc:define epic "Auth"  → drafts epic
+sdlc:create epic         → creates epic + stub features on GitHub
+sdlc:define feature #10  → details feature + stub stories
+sdlc:create feature      → creates feature + stub stories on GitHub
+sdlc:define story #15    → adds full AC, file scope, deps
+sdlc:create story        → creates story issue on GitHub
+sdlc:status              → start coding
 ```
 
 ### Starting a new sprint on an existing project
 ```
-/plan-increment "Phase 2"     → closes PI-1, creates PI-2
-/create-epic "Session Persistence"
-/create-feature #125
-/detail-story #130
-/pick-task
+sdlc:retro pi            → closes PI-1, archives it
+sdlc:define pi "Phase 2" → drafts PI-2
+sdlc:create pi           → pushes PI-2 to GitHub
+sdlc:define epic "Session Persistence"
+sdlc:create epic
+sdlc:define feature #125
+sdlc:create feature
+sdlc:define story #130
+sdlc:create story
+sdlc:status
 ```
 
 ### Mid-sprint scope change
 ```
-/update-prd "Switch from Postgres to Redis for sessions"
-/update-pi "add Redis checkpointer story to Session Persistence"
-/update-feature #125           → add the new story
-/detail-story #135             → flesh out the new story
-/sync-issues                   → verify dependency graph is consistent
+sdlc:update prd "Switch from Postgres to Redis for sessions"
+sdlc:update pi "add Redis checkpointer story to Session Persistence"
+sdlc:update feature #125    → add the new story
+sdlc:define story #135      → flesh out the new story
+sdlc:create story
+sdlc:reconcile              → verify dependency graph is consistent
 ```
 
 ### End of day check
 ```
-/sync-issues                   → fix stale labels, see what's blocked
-/pick-task                     → what's next?
+sdlc:reconcile             → fix stale labels, see what's blocked
+sdlc:status                → what's next?
 ```

@@ -28,6 +28,7 @@ Azure OpenAI (GPT-4o) as LLM backbone, Azure AI Search as vector store.
 - Add frontend dep: `cd frontend && pnpm add <pkg>`
 - Add backend dep: `cd backend && uv add <pkg>`
 - Add backend dev dep: `cd backend && uv add --group dev <pkg>`
+- SDLC Plugin: `claude --plugin-dir .claude/plugins/sdlc` (or alias: `alias cc='claude --plugin-dir .claude/plugins/sdlc'`)
 
 ## Code Conventions
 
@@ -45,7 +46,7 @@ IMPORTANT: Follow these rules strictly:
 - ALWAYS read a file before editing it
 - ALWAYS run tests after making changes
 - ALWAYS run lint and typecheck before considering work done
-- Before writing code, read the PRD at `.claude/prd/PRD.md` and the PI Plan at `.claude/pi/PI.md`
+- Before writing code, read the PRD at `.claude/sdlc/prd/PRD.md` and PI at `.claude/sdlc/pi/PI.md`
 - Track work via GitHub Issues — pick stories labeled `status:todo`, mark `status:in-progress`; when done update label to `status:done` and create a PR (the issue closes automatically when the PR merges)
 - Commit after each completed task with conventional commits referencing the issue number
 - If uncertain about approach, ASK before proceeding
@@ -62,26 +63,16 @@ IMPORTANT: Follow these rules strictly:
 
 ## Skills (Slash Commands)
 
-### PRD & PI Management
-- `/create-prd` — Bootstrap a new PRD for a new repo
-- `/update-prd [section|decision]` — Record a design change or update a PRD section
-- `/plan-increment [theme]` — Close previous PI + plan the next one
-- `/update-pi [description]` — Update PI Plan when scope changes mid-sprint
-- `/close-pi` — Archive current PI, bake decisions into PRD, tag
+### SDLC Plugin (v2)
+- `/sdlc:define [level]` — Collaborative brainstorming → local draft
+- `/sdlc:create [level]` — Push draft to GitHub/git
+- `/sdlc:update [level] [#N]` — Surgical edits to existing artifacts
+- `/sdlc:status [area]` — Project status briefing
+- `/sdlc:reconcile [area]` — Label hygiene and hierarchy audit
+- `/sdlc:retro [scope]` — Process retrospective
+- `/sdlc:capture <description>` — Quick-capture idea as triage issue
 
-### Work Decomposition
-- `/create-epic [name]` — Create detailed epic + stub feature issues on GitHub
-- `/create-feature [#issue]` — Detail a feature + create stub story issues
-- `/detail-story [#issue]` — Add full acceptance criteria, file scope, deps to a story
-
-### Work Updates
-- `/update-epic [#issue]` — Modify epic scope, add/remove features
-- `/update-feature [#issue]` — Modify feature, add/remove stories
-- `/update-story [#issue]` — Modify story AC, deps, file scope
-
-### Execution
-- `/pick-task [area]` — Find the next unblocked story to work on
-- `/sync-issues [area]` — Audit issue hierarchy, fix stale labels, validate deps
+### Other Skills
 - `/review-coderabbit [PR#]` — Fetch and triage CodeRabbit review comments
 
 ### Contextual Skills (Frontend)
@@ -96,14 +87,14 @@ Auto-available when working on `frontend/**`. See `.claude/rules/frontend.md` fo
 ## Decision Workflow
 
 When a decision is made (by the user or during implementation):
-1. Update PRD.md first — it is the source of truth. Use `/update-prd` to record decisions.
+1. Update PRD.md first — it is the source of truth. Use `sdlc:update prd` to record decisions.
 2. Update the PI Plan if scope changes affect the current increment
 3. Update affected GitHub issues if story/feature scope changes
 4. CLAUDE.md only changes for new conventions or commands
 
 ## Reference Docs
 
-- PRD (source of truth): `.claude/prd/PRD.md` — tech stack, versions, architecture, API contracts, data models, decisions log
-- PI Plan (current sprint): `.claude/pi/PI.md` — epics, features, dependency graph, worktree strategy
+- PRD (source of truth): `.claude/sdlc/prd/PRD.md` — tech stack, versions, architecture, API contracts, data models, decisions log
+- PI Plan (current sprint): `.claude/sdlc/pi/PI.md` — epics, features, dependency graph, worktree strategy
 - Human workflow: `docs/HUMAN-WORKFLOW.md` — how to launch agents, review, merge, manage the sprint
 - Design spec: `docs/superpowers/specs/2026-03-17-sdlc-skill-suite-design.md` — SDLC skill suite design
