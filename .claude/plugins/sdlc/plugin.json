@@ -1,0 +1,5 @@
+{
+  "name": "sdlc",
+  "description": "Software Development Lifecycle plugin — define, create, update, track, and retrospect on work items using GitHub Issues and git-versioned artifacts.",
+  "version": "2.0.0"
+}
