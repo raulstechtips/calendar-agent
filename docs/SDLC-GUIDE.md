@@ -145,6 +145,7 @@ Then run `sdlc:define pi` to start the next sprint.
 | `sdlc:status` | Find next unblocked story; project health briefing |
 | `sdlc:reconcile` | Audit hierarchy, fix labels, validate deps |
 | `sdlc:capture` | Quick-capture idea as triage issue |
+| `sdlc:init` | Bootstrap labels, directories, and project setup |
 
 ### Label Taxonomy
 
@@ -262,6 +263,7 @@ The text after the skill name is passed as `$ARGUMENTS` and used by the skill to
 ```
 sdlc:define prd          → guided interview, creates PRD draft
 sdlc:create prd          → commits PRD.md to git
+sdlc:init               → creates GitHub labels from PRD
 sdlc:define pi "MVP"     → creates PI-1 draft from PRD Roadmap
 sdlc:create pi           → pushes PI-1 to GitHub
 sdlc:define epic "Auth"  → drafts epic

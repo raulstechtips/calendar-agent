@@ -7,6 +7,43 @@ argument-hint: "[level] [identifier]"
 
 I'm using the sdlc:update skill to update an existing SDLC artifact.
 
+**NO SILENT SCOPE CHANGES — DIRECT OR ESCALATE**
+
+<HARD-GATE>
+Do NOT make changes that cross the DIRECT UPDATE boundary without escalating to sdlc:define. Do NOT combine multiple independent changes into one update.
+</HARD-GATE>
+
+## Process Flow
+
+```dot
+digraph update {
+    rankdir=TB;
+    "Check for reshape draft" [shape=box];
+    "Draft found?" [shape=diamond];
+    "Apply Changes table" [shape=box];
+    "Understand change" [shape=box];
+    "Assess: DIRECT or ESCALATE" [shape=box];
+    "DIRECT?" [shape=diamond];
+    "Show side-by-side, confirm, apply" [shape=box];
+    "Redirect to sdlc:define" [shape=box];
+    "Cascade check" [shape=box];
+    "Flag affected artifacts" [shape=box];
+
+    "Check for reshape draft" -> "Draft found?";
+    "Draft found?" -> "Apply Changes table" [label="yes"];
+    "Draft found?" -> "Understand change" [label="no"];
+    "Understand change" -> "Assess: DIRECT or ESCALATE";
+    "Assess: DIRECT or ESCALATE" -> "DIRECT?";
+    "DIRECT?" -> "Show side-by-side, confirm, apply" [label="yes"];
+    "DIRECT?" -> "Redirect to sdlc:define" [label="no"];
+    "Show side-by-side, confirm, apply" -> "Cascade check";
+    "Apply Changes table" -> "Cascade check";
+    "Cascade check" -> "Flag affected artifacts";
+}
+```
+
+---
+
 This skill is a **surgical editor**: small changes go through directly, large changes get redirected to `sdlc:define` for proper reshaping. Two tiers only — no fuzzy middle ground.
 
 ---

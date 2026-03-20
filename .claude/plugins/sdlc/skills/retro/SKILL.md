@@ -7,6 +7,35 @@ argument-hint: "[pi | epic #N | feature #N]"
 
 I'm using the sdlc:retro skill to run a retrospective on [scope].
 
+**ANALYZE, DON'T JUDGE**
+
+<HARD-GATE>
+Do NOT modify issues, labels, or project artifacts. Write the retrospective document only. Let the data speak — present metrics and patterns, not prescriptive process changes.
+</HARD-GATE>
+
+## Process Flow
+
+```dot
+digraph retro {
+    rankdir=TB;
+    "Parse scope" [shape=box];
+    "Early exit check" [shape=box];
+    "Stories found?" [shape=diamond];
+    "Done (nothing to analyze)" [shape=box];
+    "Gather data" [shape=box];
+    "Analyze patterns" [shape=box];
+    "Write retro document" [shape=box];
+    "Commit" [shape=box];
+
+    "Parse scope" -> "Early exit check" -> "Stories found?";
+    "Stories found?" -> "Done (nothing to analyze)" [label="no"];
+    "Stories found?" -> "Gather data" [label="yes"];
+    "Gather data" -> "Analyze patterns" -> "Write retro document" -> "Commit";
+}
+```
+
+---
+
 This skill **does not modify issues, labels, or project artifacts**. It writes a retrospective document only.
 
 ---

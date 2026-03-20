@@ -7,6 +7,37 @@ argument-hint: "[area]"
 
 I'm using the sdlc:reconcile skill to audit the issue hierarchy.
 
+**FIX LABELS, NOTHING ELSE**
+
+<HARD-GATE>
+Do NOT modify issue bodies, titles, or content. Only touch labels and open/closed state. If a fix requires content changes, flag it for sdlc:update.
+</HARD-GATE>
+
+## Process Flow
+
+```dot
+digraph reconcile {
+    rankdir=TB;
+    "Scan issues" [shape=box];
+    "Build hierarchy + dep maps" [shape=box];
+    "Run 7 checks" [shape=box];
+    "Present report" [shape=box];
+    "User approves fixes?" [shape=diamond];
+    "Apply label fixes in parallel" [shape=box];
+    "Report results" [shape=box];
+    "Flag unfixable items" [shape=box];
+    "Done" [shape=box];
+
+    "Scan issues" -> "Build hierarchy + dep maps" -> "Run 7 checks" -> "Present report";
+    "Present report" -> "User approves fixes?";
+    "User approves fixes?" -> "Apply label fixes in parallel" [label="yes"];
+    "User approves fixes?" -> "Done" [label="no"];
+    "Apply label fixes in parallel" -> "Report results" -> "Flag unfixable items";
+}
+```
+
+---
+
 This skill **only touches labels and open/closed state** — it never edits issue bodies. All fixes are presented before any changes are made.
 
 ---
@@ -20,13 +51,13 @@ Parse `$ARGUMENTS`:
 | Input | Scope |
 |-------|-------|
 | _(empty)_ | All areas |
-| Area name (`auth`, `api`, `agent`, `ui`, `search`, `infra`) | Issues with `area:<arg>` label only |
+| Area name | Issues with `area:<arg>` label only. Read `.claude/sdlc/prd/PRD.md` Label Taxonomy section to discover valid area names. If no PRD exists, treat any argument as a raw `area:<arg>` filter. |
 
 Set `AREA_FILTER`:
 - Empty: no extra flags
 - Area provided: append `--label "area:<area>"` to `gh issue list` commands below
 
-If `$ARGUMENTS` is non-empty but does not match a known area, announce: "Unknown area `$ARGUMENTS`. Valid areas: `auth`, `api`, `agent`, `ui`, `search`, `infra`. Scanning all areas instead." and proceed with no filter.
+If `$ARGUMENTS` is non-empty, treat it as an area name and apply `--label "area:<arg>"` to all queries. If the filter returns no results, announce: "No issues found with label `area:<arg>`. Check the PRD's Label Taxonomy for valid areas, or run with no argument to scan all." and proceed with no filter.
 
 ### 1b. Fetch Issues
 

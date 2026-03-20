@@ -7,6 +7,29 @@ argument-hint: "[area or 'epic #N']"
 
 I'm using the sdlc:status skill to get a project briefing.
 
+**REPORT, DON'T ACT**
+
+<HARD-GATE>
+Do NOT modify issues, labels, files, or any state. Present the briefing and offer next actions. The user or another skill acts on your recommendations.
+</HARD-GATE>
+
+## Process Flow
+
+```dot
+digraph status {
+    rankdir=LR;
+    "Parse scope" [shape=box];
+    "Gather data (6 queries)" [shape=box];
+    "Analyze" [shape=box];
+    "Present briefing" [shape=box];
+    "Offer next action" [shape=box];
+
+    "Parse scope" -> "Gather data (6 queries)" -> "Analyze" -> "Present briefing" -> "Offer next action";
+}
+```
+
+---
+
 This skill is **read-only** — it never modifies issues, labels, files, or any other state. Its sole purpose is situational awareness.
 
 ---
@@ -18,7 +41,7 @@ Parse `$ARGUMENTS` to determine the query scope:
 | Input | Scope |
 |-------|-------|
 | _(empty)_ | Full PI — all stories regardless of area |
-| Area name (`auth`, `api`, `agent`, `ui`, `search`, `infra`) | Stories with `area:<arg>` label |
+| Area name | Stories with `area:<arg>` label. Read `.claude/sdlc/prd/PRD.md` Label Taxonomy section to discover valid area names. If no PRD exists, treat any argument as a raw `area:<arg>` filter. |
 | `epic #N` | Stories whose body references `Epic: #N` in the `## Parent` section |
 
 Set `AREA_FILTER` accordingly:
@@ -26,7 +49,7 @@ Set `AREA_FILTER` accordingly:
 - Area filter: append `--label "area:<area>"` to each `gh issue list` command below
 - Epic scope: use text search `--search "Epic: #N in:body"` on the story queries, then also fetch the epic itself with `gh issue view N --json number,title,body,labels,state`
 
-If `$ARGUMENTS` is non-empty but does not match a known area or the pattern `epic #N`, announce: "Unknown scope `$ARGUMENTS`. Valid options: area name (`auth`, `api`, `agent`, `ui`, `search`, `infra`) or `epic #<number>`. Showing full PI instead." and proceed with no filter.
+If `$ARGUMENTS` is non-empty and does not match the pattern `epic #N`, treat it as an area name. Apply `--label "area:<arg>"` to all queries. If the filter returns no results, announce: "No stories found with label `area:<arg>`. Check the PRD's Label Taxonomy for valid areas, or run with no argument for full PI scope." and stop.
 
 ---
 

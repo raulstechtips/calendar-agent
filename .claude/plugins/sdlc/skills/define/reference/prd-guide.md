@@ -25,7 +25,7 @@ Run this before scope assessment — the result affects the entire flow.
 
 ### Greenfield Handling
 
-Full interview (10 questions). The user is the sole source of information. Scope is always DEEP.
+Full interview (11 questions). The user is the sole source of information. Scope is always DEEP.
 
 ### Brownfield Handling
 
@@ -51,7 +51,7 @@ Load the current PRD, identify what's changing, and scope accordingly (usually L
 
 ## Question Templates
 
-### Greenfield Interview (10 questions, one at a time)
+### Greenfield Interview (11 questions, one at a time)
 
 1. **Project name and overview:** "What's the project called, and what does it do in one sentence?"
 2. **Tech stack:** "What languages, frameworks, databases, and cloud provider will you use?"
@@ -63,6 +63,7 @@ Load the current PRD, identify what's changing, and scope accordingly (usually L
 8. **Acceptance criteria:** "What does 'done' look like for v1? What must work for you to consider it shipped?"
 9. **Out of scope:** "What will we explicitly NOT build? (important to set boundaries early)"
 10. **Decision log seed:** "Any decisions already made that we should capture? (tech choices, architectural bets, rejected alternatives)"
+11. **Area labels:** "Based on the architecture, I'd propose these area labels for tracking work: [list derived from architecture answer]. Do these cover the major areas, or should we add/remove any?"
 
 ### Brownfield Questions (ask only about gaps after codebase scan)
 
@@ -115,6 +116,15 @@ status: draft
 
 ## Out of Scope
 [explicit exclusions — things we will NOT build, at least not now]
+
+## Label Taxonomy
+
+### Areas
+| Label | Description |
+|-------|-------------|
+| area:<name> | <one-line description of what this area covers> |
+
+(Derive areas from the project's architecture. For brownfield projects, analyze the codebase directory structure and module boundaries. For greenfield, ask the user about the major areas/modules of the project.)
 
 ## Decision Log
 | Date | Decision | Reason | Affects |

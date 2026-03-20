@@ -7,6 +7,28 @@ argument-hint: "<description of the idea>"
 
 I'm using the sdlc:capture skill to quickly capture this idea.
 
+**CAPTURE, DON'T DESIGN**
+
+<HARD-GATE>
+Do NOT ask clarifying questions, assess scope, or brainstorm. Create the issue and report back. If the idea needs fleshing out, tell the user to run sdlc:define.
+</HARD-GATE>
+
+## Process Flow
+
+```dot
+digraph capture {
+    rankdir=LR;
+    "Read $ARGUMENTS" [shape=box];
+    "Derive title + body" [shape=box];
+    "gh issue create" [shape=box];
+    "Report issue URL" [shape=box];
+
+    "Read $ARGUMENTS" -> "Derive title + body" -> "gh issue create" -> "Report issue URL";
+}
+```
+
+---
+
 This is a no-ceremony skill — no context loading, no upstream artifact reading, no brainstorming phases. Just create the issue and report back.
 
 ### Instructions

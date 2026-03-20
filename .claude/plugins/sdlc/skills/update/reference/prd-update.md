@@ -58,3 +58,5 @@ gh issue list --label "area:<affected-area>" --state open --json number,title --
 ```
 
 Flag any issues that might be affected. Do not update them without user confirmation.
+
+- **If the Architecture or Label Taxonomy section changed**: check whether area labels need to be updated. If areas were added, renamed, or removed from the Label Taxonomy, flag: "Area labels may have changed. Run `sdlc:init` to sync GitHub labels with the updated PRD."

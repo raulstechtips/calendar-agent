@@ -7,6 +7,44 @@ argument-hint: "[level] [identifier]"
 
 I'm using the sdlc:define skill to define/reshape an SDLC artifact.
 
+**NO DRAFT WITHOUT ALL FIVE PHASES**
+
+<HARD-GATE>
+Do NOT produce a draft without completing Context Loading, Scope Assessment, Discovery, Approaches, and Draft phases in order. Do NOT skip a phase because the artifact "seems simple."
+</HARD-GATE>
+
+## Process Flow
+
+```dot
+digraph define {
+    rankdir=TB;
+    "Phase 0: Context Loading" [shape=box];
+    "Phase 1: Scope Assessment" [shape=box];
+    "Phase 2: Discovery" [shape=box];
+    "Post-Discovery Gate" [shape=box];
+    "Upgrade depth?" [shape=diamond];
+    "Phase 3: Approaches" [shape=box];
+    "Phase 4: Draft" [shape=box];
+    "Phase 5: Review" [shape=box];
+    "Approved?" [shape=diamond];
+    "Save draft" [shape=box];
+
+    "Phase 0: Context Loading" -> "Phase 1: Scope Assessment";
+    "Phase 1: Scope Assessment" -> "Phase 2: Discovery";
+    "Phase 2: Discovery" -> "Post-Discovery Gate";
+    "Post-Discovery Gate" -> "Upgrade depth?";
+    "Upgrade depth?" -> "Phase 2: Discovery" [label="yes, re-run at higher depth"];
+    "Upgrade depth?" -> "Phase 3: Approaches" [label="no"];
+    "Phase 3: Approaches" -> "Phase 4: Draft";
+    "Phase 4: Draft" -> "Phase 5: Review";
+    "Phase 5: Review" -> "Approved?";
+    "Approved?" -> "Phase 4: Draft" [label="changes requested"];
+    "Approved?" -> "Save draft" [label="approved"];
+}
+```
+
+---
+
 This skill has 5 mandatory phases plus a post-discovery gate. ALL phases run every time. Depth varies (LIGHT / STANDARD / DEEP) but phases are NEVER skipped.
 
 ---
@@ -238,7 +276,7 @@ parent-feature: <issue number, if applicable>
 ```
 
 - `parent-epic` and `parent-feature` are only included when relevant to the level.
-- `areas` uses the label taxonomy: `auth`, `api`, `agents`, `ui`, `infra`, `search`.
+- `areas` uses the area labels defined in the PRD's Label Taxonomy section. If defining a PRD (no existing PRD to read from), the areas are part of what you're creating — derive them from codebase analysis or user description.
 
 ### Draft Body
 

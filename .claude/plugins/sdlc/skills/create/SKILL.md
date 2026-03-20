@@ -7,6 +7,45 @@ argument-hint: "[level] [name]"
 
 I'm using the sdlc:create skill to push the draft to its final destination.
 
+**NO CREATIVE DECISIONS — EXECUTE THE DRAFT**
+
+<HARD-GATE>
+Do NOT ask creative questions, brainstorm alternatives, or modify draft content. Your job is validation and execution. If the draft needs creative changes, escalate back to sdlc:define.
+</HARD-GATE>
+
+## Process Flow
+
+```dot
+digraph create {
+    rankdir=TB;
+    "Locate draft" [shape=box];
+    "Validate" [shape=box];
+    "All pass?" [shape=diamond];
+    "Minor gaps?" [shape=diamond];
+    "Structural?" [shape=diamond];
+    "FIX INLINE" [shape=box];
+    "Load execution reference" [shape=box];
+    "REOPEN → sdlc:define" [shape=box];
+    "ESCALATE to user" [shape=box];
+    "Execute" [shape=box];
+    "Report + cleanup" [shape=box];
+
+    "Locate draft" -> "Validate";
+    "Validate" -> "All pass?";
+    "All pass?" -> "Load execution reference" [label="yes"];
+    "All pass?" -> "Minor gaps?" [label="no"];
+    "Minor gaps?" -> "FIX INLINE" [label="yes"];
+    "FIX INLINE" -> "Load execution reference";
+    "Minor gaps?" -> "Structural?" [label="no"];
+    "Structural?" -> "REOPEN → sdlc:define" [label="yes"];
+    "Structural?" -> "ESCALATE to user" [label="no"];
+    "Load execution reference" -> "Execute";
+    "Execute" -> "Report + cleanup";
+}
+```
+
+---
+
 This skill is a **one-way valve**: draft in, artifacts out. It never brainstorms, never asks creative questions, and never invents content. If the draft is incomplete, it redirects back to `sdlc:define`.
 
 ---

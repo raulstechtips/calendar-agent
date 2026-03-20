@@ -30,7 +30,7 @@
 3. **Features:** "What are the features? (confirm or adjust the PI's feature list)"
 4. **Non-goals:** "What's explicitly out of scope for this epic?"
 5. **Priority:** "What priority: critical, high, medium, or low?"
-6. **Area labels:** "Which areas does this touch? (auth, api, agents, ui, infra, search)"
+6. **Area labels:** "Which areas does this touch? (check the PRD's Label Taxonomy section at `.claude/sdlc/prd/PRD.md` for this project's valid areas)"
 7. **Dependencies:** "Does it depend on or block other epics or features?"
 
 ### LIGHT: Focus on questions 1-3, confirm the rest from PI context.
