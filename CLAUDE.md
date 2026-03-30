@@ -28,7 +28,6 @@ Azure OpenAI (GPT-4o) as LLM backbone, Azure AI Search as vector store.
 - Add frontend dep: `cd frontend && pnpm add <pkg>`
 - Add backend dep: `cd backend && uv add <pkg>`
 - Add backend dev dep: `cd backend && uv add --group dev <pkg>`
-- SDLC Plugin: `claude --plugin-dir .claude/plugins/sdlc` (or alias: `alias cc='claude --plugin-dir .claude/plugins/sdlc'`)
 
 ## Code Conventions
 
@@ -46,11 +45,8 @@ IMPORTANT: Follow these rules strictly:
 - ALWAYS read a file before editing it
 - ALWAYS run tests after making changes
 - ALWAYS run lint and typecheck before considering work done
-- Before writing code, read the PRD at `.claude/sdlc/prd/PRD.md` and PI at `.claude/sdlc/pi/PI.md`
-- Track work via GitHub Issues — pick stories labeled `status:todo`, mark `status:in-progress`; when done update label to `status:done` and create a PR (the issue closes automatically when the PR merges)
 - Commit after each completed task with conventional commits referencing the issue number
 - If uncertain about approach, ASK before proceeding
-- When starting a session, check project state: `git log --oneline -10 && gh issue list --label "status:todo" --label "status:in-progress"`
 
 ## Architecture Decisions
 
@@ -61,39 +57,10 @@ IMPORTANT: Follow these rules strictly:
 - Tokens: Fernet-encrypted Google OAuth tokens stored in Redis with TTL
 - Rate limiting: slowapi with Redis backend
 
-## Skills (Slash Commands)
-
-### SDLC Plugin (v2)
-- `/sdlc:define [level]` — Collaborative brainstorming → local draft
-- `/sdlc:create [level]` — Push draft to GitHub/git
-- `/sdlc:update [level] [#N]` — Surgical edits to existing artifacts
-- `/sdlc:status [area]` — Project status briefing
-- `/sdlc:reconcile [area]` — Label hygiene and hierarchy audit
-- `/sdlc:retro [scope]` — Process retrospective
-- `/sdlc:capture <description>` — Quick-capture idea as triage issue
-
-### Other Skills
-- `/review-coderabbit [PR#]` — Fetch and triage CodeRabbit review comments
-
 ### Contextual Skills (Frontend)
 
 Auto-available when working on `frontend/**`. See `.claude/rules/frontend.md` for usage guidance.
 
 - `shadcn` — shadcn/ui component management
-- `ui-ux-pro-max` — UI/UX design intelligence
 - `vercel-react-best-practices` — React/Next.js performance patterns
 - `vercel-composition-patterns` — React component architecture
-
-## Decision Workflow
-
-When a decision is made (by the user or during implementation):
-1. Update PRD.md first — it is the source of truth. Use `sdlc:update prd` to record decisions.
-2. Update the PI Plan if scope changes affect the current increment
-3. Update affected GitHub issues if story/feature scope changes
-4. CLAUDE.md only changes for new conventions or commands
-
-## Reference Docs
-
-- PRD (source of truth): `.claude/sdlc/prd/PRD.md` — tech stack, versions, architecture, API contracts, data models, decisions log
-- PI Plan (current sprint): `.claude/sdlc/pi/PI.md` — epics, features, dependency graph, worktree strategy
-- Human workflow: `docs/HUMAN-WORKFLOW.md` — how to launch agents, review, merge, manage the sprint
