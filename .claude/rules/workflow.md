@@ -20,9 +20,8 @@ Follow this exact process for every story/task:
 7. **Implement minimum code to pass tests** (Green phase)
 8. **Refactor** while tests stay green
 9. **Verify**: run the full verification suite for your area
-10. **Internal code review**: launch the `code-reviewer` agent as a subagent to review all changes on the current branch. Address any CRITICAL findings before proceeding — WARNING and SUGGESTION items are at your discretion but should be considered.
-11. **Commit**: conventional commit referencing the issue number
-12. **Update issue and open PR**:
+10. **Commit**: conventional commit referencing the issue number
+11. **Update issue and open PR**:
     ```bash
     gh issue edit <n> --add-label "status:done" --remove-label "status:in-progress"
     ```

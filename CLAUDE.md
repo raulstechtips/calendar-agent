@@ -49,27 +49,6 @@ IMPORTANT: Follow these rules strictly:
 - ALWAYS read a file before editing it
 - ALWAYS run tests after making changes
 - ALWAYS run lint and typecheck before considering work done
-- Before writing code, read the active spec in `.claude/specs/in-progress/`
-- Track work via GitHub Issues — pick stories labeled `status:todo`, mark `status:in-progress`; when done update label to `status:done` and create a PR (the issue closes automatically when the PR merges)
-- Commit after each completed task with conventional commits referencing the issue number
-- If uncertain about approach, ASK before proceeding
-- When starting a session, check project state: `git log --oneline -10 && gh issue list --label "status:todo" --label "status:in-progress"`
-
-## Architecture Decisions
-
-- Auth: Auth.js v5 beta with Google OAuth, incremental consent, offline access for refresh tokens
-- Vector store: Single shared Azure AI Search index with `user_id` filter (not index-per-user)
-- Agent: LangGraph ReAct via `create_react_agent` + `langchain-google-community` tools
-- Gmail scope: Use `gmail.metadata` (Sensitive) not `gmail.readonly` (Restricted) to avoid annual security audit
-- Tokens: Fernet-encrypted Google OAuth tokens stored in Redis with TTL
-- Rate limiting: slowapi with Redis backend
-
-## Skills (Slash Commands)
-
-- `/pick-task [area]` — Find the next unblocked story to work on
-- `/sync-issues [area]` — Check issue status against actual code state
-- `/update-decision` — Record an architecture/product decision into SPEC.md and update affected issues
-- `/review-coderabbit [PR#]` — Fetch and triage CodeRabbit review comments on a PR
 
 ### Contextual Skills (Frontend)
 
@@ -79,15 +58,3 @@ Auto-available when working on `frontend/**`. See `.claude/rules/frontend.md` fo
 - `frontend-design` — Opinionated UI/UX design guidance (Anthropic official)
 - `vercel-react-best-practices` — React/Next.js performance patterns
 - `vercel-composition-patterns` — React component architecture
-
-## Decision Workflow
-
-When a decision is made (by the user or during implementation):
-1. Update SPEC.md first — it is the source of truth
-2. Update affected GitHub issues if scope changes
-3. CLAUDE.md only changes for new conventions or commands
-
-## Reference Docs
-
-- SPEC.md (source of truth): `.claude/specs/in-progress/SPEC.md` — tech stack, versions, architecture, API contracts, data models, decisions log
-- Human workflow: `docs/HUMAN-WORKFLOW.md` — how to launch agents, review, merge, manage the sprint
