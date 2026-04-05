@@ -37,7 +37,7 @@ paths:
 ## Tailwind v4 + shadcn/ui
 
 - CSS-first configuration — all theme tokens live in `globals.css` via `@theme inline`. Never create a `tailwind.config.js`
-- OKLCH color space for all colors — follow `frontend/DESIGN.md` tokens. Never use hex or rgb values
+- OKLCH color space for all colors — follow `.impeccable.md` design tokens. Never use hex or rgb values
 - Always use `cn()` for conditional classNames — never concatenate strings
 - Mobile-first: unprefixed utilities are the mobile base, `md:`/`lg:` for larger screens
 - No arbitrary values (`mt-[13px]`) — use theme tokens. If a token doesn't exist, add it to `@theme`
@@ -59,7 +59,7 @@ paths:
 
 Invoke BEFORE the first edit, not after. If code was already written without a skill: stop, invoke, revise.
 
-1. `impeccable:frontend-design` — before ANY visual work (components, pages, layouts). Provides opinionated design direction. Style guide: `frontend/DESIGN.md`
+1. `impeccable:frontend-design` — before ANY visual work (components, pages, layouts). Provides opinionated design direction. Style guide: `.impeccable.md`
 2. `shadcn` — before adding or editing `components/ui/` files. Checks if the component exists and provides composition patterns
 3. `vercel-react-best-practices` — before touching data fetching, bundle-affecting imports, or rendering strategy
 4. `vercel-composition-patterns` — when a component exceeds ~80 lines or needs compound component patterns
