@@ -14,7 +14,7 @@ description: Code quality and anti-pattern rules
 
 ## Under-engineering
 
-- Every external call (HTTP, Redis, Google API, Azure) MUST have error handling
+- Every external call (HTTP, Redis, Google API, OpenAI, Qdrant) MUST have error handling
 - Every API endpoint MUST validate input at the boundary
 - Every async resource MUST be properly cleaned up (async context managers, lifespan shutdown)
 
@@ -23,7 +23,6 @@ description: Code quality and anti-pattern rules
 - Before creating any new file, search for existing patterns to follow
 - Before adding a utility, check if one already exists
 - Match the naming conventions, file structure, and code style of existing code exactly
-- ALWAYS prefer editing an existing file over creating a new one
 
 ## Cleanup before commit
 
@@ -43,7 +42,7 @@ description: Code quality and anti-pattern rules
 
 ## Dependencies
 
-- Do NOT add any package not listed in the SPEC or already in package.json/pyproject.toml without asking first
+- Do NOT add any package not already in package.json/pyproject.toml without asking first
 - Before adding a dependency, check if the platform API or an existing dependency already handles it
 
 ## Performance
