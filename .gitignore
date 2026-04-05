@@ -142,6 +142,7 @@ vite.config.ts.timestamp-*
 .claude/worktrees/
 .claude/settings.local.json
 .agents/
+docs/superpowers/
 
 # Python
 __pycache__/

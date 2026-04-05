@@ -49,6 +49,7 @@ IMPORTANT: Follow these rules strictly:
 - ALWAYS read a file before editing it
 - ALWAYS run tests after making changes
 - ALWAYS run lint and typecheck before considering work done
+- NEVER commit `docs/superpowers/` files — they are local-only design artifacts and are gitignored
 
 ### Contextual Skills (Frontend)
 
