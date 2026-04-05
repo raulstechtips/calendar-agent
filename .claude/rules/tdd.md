@@ -40,12 +40,7 @@ IMPORTANT: These rules are non-negotiable.
 - Backend: `backend/tests/test_<module>.py` mirroring `backend/app/<module>/`
 - Frontend: co-located `ComponentName.test.tsx` next to `ComponentName.tsx`
 
-## Test naming
-
-- Use descriptive names: `test_should_reject_expired_token`, `test_should_create_event_with_valid_data`
-- Group related tests in classes or describe blocks
-
-## Coverage targets (realistic for 2-day sprint)
+## Coverage targets
 
 - Critical paths (auth, tokens, guardrails): 90%+
 - Business logic (endpoints, tools): 80%+
