@@ -330,6 +330,7 @@ A React Native application for iOS and Android. This is a separate product effor
 | Area | `area:search` | Qdrant integration, embeddings, context ingestion |
 | Area | `area:auth` | NextAuth, Google OAuth, token management |
 | Area | `area:infra` | Docker Compose, CI/CD, deployment |
+| Area | `area:devex` | Developer experience, rules, workflow |
 | Status | `status:todo` | Refined and ready for development |
 | Status | `status:in-progress` | Currently being worked on |
 | Status | `status:done` | Implementation complete |
