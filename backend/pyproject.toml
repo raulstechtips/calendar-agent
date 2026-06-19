@@ -18,7 +18,7 @@ dependencies = [
     "redis[hiredis]==7.3.0",
     "slowapi==0.1.9",
     "asgi-correlation-id==4.3.4",
-    "cryptography==46.0.5",
+    "cryptography==48.0.1",
     "google-auth==2.49.1",
     "google-api-python-client==2.192.0",
     "cachecontrol==0.14.4",
