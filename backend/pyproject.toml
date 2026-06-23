@@ -6,7 +6,7 @@ requires-python = ">=3.12"
 dependencies = [
     "fastapi[standard]==0.135.1",
     "pydantic==2.12.5",
-    "pydantic-settings==2.13.1",
+    "pydantic-settings==2.14.2",
     "langgraph==1.1.2",
     "langgraph-prebuilt==1.0.8",
     "langchain-core==1.2.19",
